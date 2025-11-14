@@ -2021,3 +2021,128 @@ input:checked + .slider:before {
         transform: translate(-50%, -50%) scale(0.9);
     }
 }
+
+/* NEU: Für die Platzierung auf der Rank-Card */
+        .rank-placement-badge {
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--primary-light);
+            margin-left: 0.75rem;
+            vertical-align: middle;
+        }
+
+        /* NEU: Container für die Leaderboard-Seite */
+        .leaderboard-page-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .leaderboard-hero {
+            text-align: center;
+            padding: 2rem 0;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+
+        .leaderboard-hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .leaderboard-hero p {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+        }
+
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .leaderboard-entry {
+            display: grid;
+            /* Spalten: Pos | Name | Rang (Icon+Punkte) | Streak | kg */
+            grid-template-columns: 20px auto 100px 60px 70px; /* Geändert: 1fr zu auto */
+            align-items: center; /* Hinzugefügt */
+            gap: 0.75rem; /* Weniger Abstand */
+            padding: 0.5rem 0.75rem; /* Weniger Padding (Höhe) */
+            background: var(--bg-primary);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            border: 1px solid var(--border-color);
+        }
+        .leaderboard-entry.current-user { /* NEU: Stil für aktuellen User */
+            border-color: var(--primary-color);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .leaderboard-entry:nth-child(1) .leaderboard-pos { color: #f59e0b; /* Gold */ }
+        .leaderboard-entry:nth-child(2) .leaderboard-pos { color: #c0c0c0; /* Silber */ }
+        .leaderboard-entry:nth-child(3) .leaderboard-pos { color: #cd7f32; /* Bronze */ }
+        
+        .leaderboard-pos {
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: center;
+        }
+        .leaderboard-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .leaderboard-rank {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem; /* Kleinere Schrift */
+            color: var(--text-secondary);
+            white-space: nowrap; /* Hinzugefügt */
+        }
+        .leaderboard-rank img {
+            width: 24px;
+            height: 24px;
+        }
+        .leaderboard-rank span {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .leaderboard-stat {
+            text-align: right;
+            color: var(--text-secondary);
+            /* Hinzugefügt/Geändert: */
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.35rem;
+            white-space: nowrap;
+        }
+        .leaderboard-stat strong {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem; /* Kleinere Schrift */
+        }
+        .leaderboard-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100px; /* Mindesthöhe für das Bento-Item */
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Kleine Anpassung für mobile Ansicht des Leaderboards */
+        @media (max-width: 768px) {
+            .leaderboard-entry {
+                grid-template-columns: 20px 1fr 80px; /* Pos | Name | kg */
+                gap: 0.5rem;
+            }
+            .leaderboard-rank, .leaderboard-stat.streak {
+                display: none; /* Auf Mobilgeräten Rank und Streak ausblenden für Platz */
+            }
+        }
