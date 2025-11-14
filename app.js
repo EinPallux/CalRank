@@ -1,3 +1,7 @@
+// ==================== GLOBALE VARIABLEN (aus index.html) ====================
+// app, auth, und db werden in index.html initialisiert und sind hier global verfügbar.
+// let app, auth, db; // (Nur zur Erinnerung)
+
 // ==================== DATA STRUCTURE ====================
 let userData = {
     profile: {
@@ -31,30 +35,34 @@ let userData = {
         rankHistory: [],
         lastCalculated: null
     },
-    setupComplete: false
+    setupComplete: false // Wird jetzt in Firestore gespeichert
 };
 
-// ==================== INITIALIZATION ====================
+// NEU: Hält den Echtzeit-Listener für das Leaderboard
+let leaderboardListener = null;
+
+// ==================== INITIALIZATION (NEU: Auth-Gesteuert) ====================
 document.addEventListener('DOMContentLoaded', function() {
-    loadData();
     
-    if (userData.setupComplete) {
-        showDashboard();
-        initDashboard();
-        
-        // Load supplement reminder setting
-        if (userData.settings && userData.settings.supplementReminder !== undefined) {
-            document.getElementById('supplementReminderToggle').checked = userData.settings.supplementReminder;
+    // Auth State Listener: Der NEUE EINSTIEGSPUNKT der App
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // User ist eingeloggt
+            console.log("User ist eingeloggt:", user.uid);
+            loadData(user.uid); // Lade Daten aus Firestore
+        } else {
+            // User ist ausgeloggt
+            console.log("User ist ausgeloggt.");
+            // Alte Daten (falls vorhanden) zurücksetzen
+            resetLocalData(); 
+            // Stoppe Leaderboard-Updates, wenn ausgeloggt
+            if (leaderboardListener) {
+                leaderboardListener(); // unsubscriben
+                leaderboardListener = null;
+            }
+            showLoginScreen(); // Zeige Login-Bildschirm
         }
-        
-        // Check supplement reminder
-        checkSupplementReminder();
-        
-        // Calculate rank for completed days
-        calculateRankForPastDays();
-    } else {
-        showSetup();
-    }
+    });
     
     // Set today's date for weight input
     document.getElementById('weightDate').valueAsDate = new Date();
@@ -67,19 +75,198 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// ==================== DATA PERSISTENCE ====================
-function saveData() {
-    localStorage.setItem('weightLossTracker', JSON.stringify(userData));
-}
+// ==================== DATA PERSISTENCE (NEU: Firestore) ====================
 
-function loadData() {
-    const saved = localStorage.getItem('weightLossTracker');
-    if (saved) {
-        userData = JSON.parse(saved);
+async function saveData() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.warn("Versuch zu speichern, aber kein User eingeloggt.");
+        return;
+    }
+
+    try {
+        // Speichert das *gesamte* userData-Objekt in Firestore unter der User-ID
+        await db.collection('users').doc(user.uid).set(userData);
+        console.log("Daten in Firestore gespeichert.");
+    } catch (error) {
+        console.error("Fehler beim Speichern in Firestore:", error);
+        showNotification("Fehler: Daten konnten nicht synchronisiert werden.", "error");
     }
 }
 
-// ==================== SETUP FLOW ====================
+async function loadData(uid) {
+    try {
+        const docRef = db.collection('users').doc(uid);
+        const doc = await docRef.get();
+
+        if (doc.exists) {
+            // Daten aus Firestore laden und mit Standardstruktur zusammenführen
+            // (falls neue Features hinzugefügt wurden, die im alten Objekt fehlen)
+            const firestoreData = doc.data();
+            userData = {
+                ...userData, // Standardstruktur
+                ...firestoreData, // Firestore-Daten überschreiben
+                profile: { ...userData.profile, ...firestoreData.profile },
+                ranking: { ...userData.ranking, ...firestoreData.ranking },
+                settings: { ...userData.settings, ...firestoreData.settings }
+            };
+            
+            console.log("Daten aus Firestore geladen.");
+            
+            if (userData.setupComplete) {
+                // Setup ist abgeschlossen, Dashboard anzeigen
+                showDashboard();
+                initDashboard();
+                
+                // Starte Leaderboard-Listener
+                if (!leaderboardListener) {
+                    leaderboardListener = listenForLeaderboard();
+                }
+            } else {
+                // User ist eingeloggt, hat aber Setup nicht beendet
+                // (sollte nicht passieren, aber als Fallback)
+                showSetup();
+            }
+
+        } else {
+            // User ist eingeloggt (z.B. gerade registriert), aber hat noch keine Daten
+            // Das ist der Fall *während* des Setups.
+            console.log("Keine Daten in Firestore gefunden (neuer User). Zeige Setup.");
+            resetLocalData(); // Stelle sicher, dass keine alten Daten rumliegen
+            showSetup();
+        }
+    } catch (error) {
+        console.error("Fehler beim Laden der Daten:", error);
+        showNotification("Fehler beim Laden der Profildaten.", "error");
+        handleLogout(); // Bei Ladefehler ausloggen
+    }
+}
+
+// Setzt das lokale userData-Objekt zurück
+function resetLocalData() {
+    userData = {
+        profile: { name: '', age: 0, gender: 'male', height: 0, currentWeight: 0, targetWeight: 0, activityLevel: 1.55, deficit: 500, startWeight: 0, startDate: null, bmr: 0, tdee: 0, targetCalories: 0, targetProtein: 0, motivationReason: '' },
+        dailyEntries: {},
+        weightEntries: [],
+        settings: { supplementReminder: false, supplementTakenToday: false },
+        ranking: { currentRank: 0, rankPoints: 0, totalPointsEarned: 0, totalPointsLost: 0, rankHistory: [], lastCalculated: null },
+        setupComplete: false
+    };
+}
+
+
+// ==================== AUTH FUNCTIONS (NEU) ====================
+
+async function handleRegistration() {
+    // Schritt 7 (Zusammenfassung) ist aktiv, also sind alle Daten validiert
+    // 1. Lade E-Mail und Passwort
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (password.length < 6) {
+        showNotification("Passwort muss mindestens 6 Zeichen lang sein.", "error");
+        return;
+    }
+    if (!email) {
+        showNotification("Bitte gib eine gültige E-Mail an.", "error");
+        return;
+    }
+
+    try {
+        // 2. Erstelle User in Firebase Auth
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        console.log("User erstellt:", user.uid);
+
+        // 3. Setup-Daten finalisieren (ersetzt completeSetup())
+        userData.setupComplete = true;
+        userData.profile.startDate = new Date().toISOString();
+        
+        // Add initial weight entry
+        const today = getDateString(new Date());
+        userData.weightEntries.push({
+            date: today,
+            weight: userData.profile.currentWeight
+        });
+
+        // 4. Speichere das erste userData-Objekt in Firestore
+        // WICHTIG: Wir rufen saveData() auf. Der auth.onAuthStateChanged-Listener
+        // wird fast zeitgleich getriggert, lädt die Daten (die wir hier speichern)
+        // und zeigt dann das Dashboard an.
+        await saveData(); 
+        
+        showNotification('🎉 Profil erfolgreich erstellt! Viel Erfolg!', 'success');
+        // Der onAuthStateChanged-Listener übernimmt ab hier.
+        
+    } catch (error) {
+        console.error("Fehler bei der Registrierung:", error);
+        if (error.code === 'auth/email-already-in-use') {
+            showNotification("Diese E-Mail wird bereits verwendet.", "error");
+        } else {
+            showNotification("Fehler bei der Registrierung. " + error.message, "error");
+        }
+    }
+}
+
+async function handleLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!email || !password) {
+        showNotification("Bitte E-Mail und Passwort eingeben.", "error");
+        return;
+    }
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        // Login erfolgreich. Der onAuthStateChanged-Listener übernimmt den Rest.
+        showNotification("Willkommen zurück!", "success");
+    } catch (error) {
+        console.error("Fehler beim Login:", error);
+        showNotification("Login fehlgeschlagen. Prüfe E-Mail und Passwort.", "error");
+    }
+}
+
+async function handleLogout() {
+    try {
+        await auth.signOut();
+        // Logout erfolgreich. Der onAuthStateChanged-Listener übernimmt den Rest.
+        showNotification("Erfolgreich abgemeldet.", "success");
+    } catch (error) {
+        console.error("Fehler beim Logout:", error);
+    }
+}
+
+async function handleDeleteAccount() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    if (confirm('⚠️ ACHTUNG: Dein Konto und alle deine Daten in der Cloud werden unwiderruflich gelöscht! Bist du sicher?')) {
+        if (confirm('Wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden!')) {
+            try {
+                // 1. Firestore-Dokument löschen
+                await db.collection('users').doc(user.uid).delete();
+                
+                // 2. Auth-User löschen
+                await user.delete();
+                
+                showNotification("Konto erfolgreich gelöscht.", "success");
+                // Der onAuthStateChanged-Listener wird getriggert (user ist null)
+                // und zeigt den Login-Screen an.
+            } catch (error) {
+                console.error("Fehler beim Löschen des Kontos:", error);
+                if (error.code === 'auth/requires-recent-login') {
+                    showNotification("Bitte melde dich kurz ab und wieder an, um dein Konto zu löschen.", "error");
+                } else {
+                    showNotification("Fehler beim Löschen des Kontos.", "error");
+                }
+            }
+        }
+    }
+}
+
+
+// ==================== SETUP FLOW (Größtenteils unverändert) ====================
 let currentSetupStep = 1;
 
 function nextStep() {
@@ -90,9 +277,10 @@ function nextStep() {
         const name = document.getElementById('name').value.trim();
         const age = parseInt(document.getElementById('age').value);
         const gender = document.getElementById('gender').value;
+        // NEU: E-Mail/Passwort-Validierung passiert erst in handleRegistration()
         
         if (!name || !age || age < 10 || age > 120) {
-            showNotification('Bitte fülle alle Felder korrekt aus', 'error');
+            showNotification('Bitte fülle Name und Alter korrekt aus', 'error');
             return;
         }
         
@@ -173,7 +361,7 @@ function prevStep() {
     document.getElementById(`step${currentSetupStep}`).classList.add('active');
     document.getElementById('currentStep').textContent = currentSetupStep;
     
-    const progress = (currentSetupStep / 5) * 100;
+    const progress = (currentSetupStep / 7) * 100; // Angepasst auf 7 Schritte
     document.getElementById('setupProgress').style.width = progress + '%';
 }
 
@@ -208,38 +396,47 @@ function calculateAndDisplaySummary() {
     document.getElementById('summaryProtein').textContent = p.targetProtein + 'g';
 }
 
-function completeSetup() {
-    userData.setupComplete = true;
-    userData.profile.startDate = new Date().toISOString();
-    
-    // Add initial weight entry
-    const today = getDateString(new Date());
-    userData.weightEntries.push({
-        date: today,
-        weight: userData.profile.currentWeight
-    });
-    
-    saveData();
-    showDashboard();
-    initDashboard();
-    showNotification('🎉 Profil erfolgreich eingerichtet! Viel Erfolg!', 'success');
+// Hieß vorher completeSetup(), wird jetzt von handleRegistration() aufgerufen
+// function completeSetup() { ... } // (ENTFERNT, Logik ist in handleRegistration)
+
+
+// ==================== NAVIGATION (NEU) ====================
+function showSetup(event) {
+    if (event) event.preventDefault();
+    document.getElementById('setupScreen').style.display = 'flex';
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('dashboard').classList.add('hidden');
 }
 
-// ==================== NAVIGATION ====================
-function showSetup() {
-    document.getElementById('setupScreen').style.display = 'flex';
+function showLoginScreen(event) {
+    if (event) event.preventDefault();
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('loginScreen').classList.remove('hidden');
     document.getElementById('dashboard').classList.add('hidden');
 }
 
 function showDashboard() {
     document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
 }
 
-// ==================== DASHBOARD ====================
+// ==================== DASHBOARD (Unverändert) ====================
 function initDashboard() {
     updateDashboard();
     initChart();
+    
+    // Load supplement reminder setting
+    if (userData.settings && userData.settings.supplementReminder !== undefined) {
+        document.getElementById('supplementReminderToggle').checked = userData.settings.supplementReminder;
+    }
+    
+    // Check supplement reminder
+    checkSupplementReminder();
+    
+    // Calculate rank for completed days
+    calculateRankForPastDays(); // Wichtig: Diese Funktion ruft am Ende saveData() auf!
+
     setInterval(updateDashboard, 60000); // Update every minute
 }
 
@@ -304,8 +501,16 @@ function getTodayData() {
         steps: 0,
         stepsCalories: 0
     };
+    // Stelle sicher, dass heutige Daten im Objekt sind, falls es das erste Mal ist
+    if (!userData.dailyEntries[today]) {
+        userData.dailyEntries[today] = entry;
+    }
     return entry;
 }
+
+// ... (Restliche Dashboard-Helferfunktionen bleiben unverändert) ...
+// updateProgressBar, updateStatusMessage, calculateStreak, updateStatistics,
+// getLastNDaysData, getWeightEntriesInRange, getDaysSinceStart, getLatestWeight
 
 function updateProgressBar(elementId, current, target) {
     const percentage = Math.min((current / target) * 100, 100);
@@ -360,12 +565,12 @@ function updateStatusMessage(todayData) {
     
     // Add motivation reminder
     if (showMotivation) {
-        message += `<br><br><em style="color: var(--primary-color);">💭 Denk daran: ${p.motivationReason}</em>`;
+        message += `<br><br><em style="color: var(--primary-color); font-style: italic;">💭 Denk daran: ${p.motivationReason}</em>`;
     }
     
     const statusElement = document.getElementById('statusMessage');
     if (statusElement) {
-        statusElement.innerHTML = `<span style="font-size: 1.5rem; margin-right: 0.5rem;">${emoji}</span> ${message}`;
+        statusElement.innerHTML = `<span style="font-size: 1.25rem; margin-right: 0.5rem;">${emoji}</span> ${message}`;
     }
 }
 
@@ -377,10 +582,25 @@ function calculateStreak() {
     for (let i = 0; i < dates.length; i++) {
         const checkDate = getDateString(currentDate);
         if (dates.includes(checkDate)) {
-            streak++;
-            currentDate.setDate(currentDate.getDate() - 1);
+            // Prüfen, ob an diesem Tag auch wirklich was getrackt wurde
+            const entry = userData.dailyEntries[checkDate];
+            if (entry && (entry.calories > 0 || entry.meals.length > 0 || entry.steps > 0)) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+            } else {
+                // Tag ist vorhanden, aber leer
+                break;
+            }
         } else {
-            break;
+            // Datum fehlt in der Liste
+            // Ausnahme: Wenn der *erste* Eintrag (heute) noch leer ist,
+            // aber der davor nicht, zählen wir weiter
+            if (i === 0 && dates.length > 1 && dates[1] === getDateString(new Date(new Date().setDate(new Date().getDate() - 1)))) {
+                // Heute ist leer, aber gestern wurde getrackt.
+                // Wir tun so, als wäre "heute" der Start der Zählung
+            } else {
+                break;
+            }
         }
     }
     
@@ -408,8 +628,8 @@ function updateStatistics() {
     
     // Total progress
     const totalLost = userData.profile.startWeight - getLatestWeight();
-    const sign = totalLost > 0 ? '-' : '+';
-    document.getElementById('totalWeightLost').textContent = `${sign}${Math.abs(totalLost).toFixed(1)} kg`;
+    const sign = totalLost > 0 ? '-' : '+'; // Logik umgedreht für Anzeige
+    document.getElementById('totalWeightLost').textContent = `${totalLost > 0 ? '📉' : '📈'} ${Math.abs(totalLost).toFixed(1)} kg`;
     
     const totalToLose = userData.profile.startWeight - userData.profile.targetWeight;
     const progressPct = ((totalLost / totalToLose) * 100).toFixed(1);
@@ -479,10 +699,10 @@ function getLatestWeight() {
     return sorted[0].weight;
 }
 
-// ==================== CHART ====================
+// ==================== CHART (Unverändert) ====================
 let weightChart = null;
 let chartPeriod = 'month';
-
+// ... (initChart, updateChart, changeChartPeriod bleiben unverändert) ...
 function initChart() {
     const ctx = document.getElementById('weightChart').getContext('2d');
     
@@ -611,7 +831,7 @@ function changeChartPeriod(period) {
     updateChart();
 }
 
-// ==================== MEALS ====================
+// ==================== MEALS (WICHTIG: ruft saveData() auf) ====================
 function addMeal() {
     const category = document.getElementById('mealCategory').value;
     const name = document.getElementById('mealName').value.trim();
@@ -648,7 +868,7 @@ function addMeal() {
     userData.dailyEntries[today].calories += calories;
     userData.dailyEntries[today].protein += protein;
     
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     
     // Clear inputs
     document.getElementById('mealName').value = '';
@@ -703,14 +923,14 @@ function deleteMeal(mealId) {
     todayData.protein -= meal.protein;
     todayData.meals.splice(mealIndex, 1);
     
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     updateDashboard();
     displayTodayMeals();
     
     showNotification('Mahlzeit gelöscht', 'success');
 }
 
-// ==================== WEIGHT ====================
+// ==================== WEIGHT (WICHTIG: ruft saveData() auf) ====================
 function addWeight() {
     const dateInput = document.getElementById('weightDate').value;
     const weight = parseFloat(document.getElementById('weightValue').value);
@@ -743,7 +963,7 @@ function addWeight() {
     
     userData.profile.currentWeight = latestEntry.weight;
     
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     updateDashboard();
     closeModal('addWeight');
     
@@ -751,7 +971,7 @@ function addWeight() {
     document.getElementById('weightValue').value = '';
 }
 
-// ==================== MODALS ====================
+// ==================== MODALS (Unverändert) ====================
 function openModal(type) {
     const modalId = type + 'Modal';
     const modal = document.getElementById(modalId);
@@ -777,7 +997,8 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ==================== HISTORY ====================
+// ==================== HISTORY (Unverändert) ====================
+// ... (switchHistoryTab, displayHistory bleiben unverändert) ...
 function switchHistoryTab(type) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
@@ -858,21 +1079,23 @@ function displayHistory(type) {
     }
 }
 
-// ==================== SETTINGS ====================
+// ==================== SETTINGS (Angepasst) ====================
 function openSettings() {
     openModal('settings');
 }
 
 function editProfile() {
-    if (confirm('Möchtest du dein Profil wirklich bearbeiten? Das Dashboard wird zurückgesetzt.')) {
+    // Diese Funktion ist jetzt komplizierter, da das Profil in Firestore liegt.
+    // Einfache Lösung: Zum Setup-Screen zurückleiten, um Daten zu ändern.
+    if (confirm('Möchtest du dein Profil bearbeiten? Du wirst zum Setup zurückgeleitet, um deine Daten zu aktualisieren.')) {
         closeModal('settings');
         currentSetupStep = 1;
         document.querySelectorAll('.setup-step').forEach(step => step.classList.remove('active'));
         document.getElementById('step1').classList.add('active');
-        document.getElementById('setupProgress').style.width = '20%';
+        document.getElementById('setupProgress').style.width = (1/7 * 100) + '%';
         document.getElementById('currentStep').textContent = '1';
         
-        // Pre-fill form with current data
+        // Pre-fill form mit aktuellen Daten
         document.getElementById('name').value = userData.profile.name;
         document.getElementById('age').value = userData.profile.age;
         document.getElementById('gender').value = userData.profile.gender;
@@ -880,33 +1103,68 @@ function editProfile() {
         document.getElementById('currentWeight').value = getLatestWeight();
         document.getElementById('targetWeight').value = userData.profile.targetWeight;
         
+        // E-Mail/Passwort ausblenden, da sie nicht geändert werden sollen
+        document.getElementById('email').parentElement.style.display = 'none';
+        document.getElementById('password').parentElement.style.display = 'none';
+        
+        // "Konto erstellen"-Button zu "Speichern" ändern
+        const setupBtn = document.querySelector('#step7 .btn-large');
+        setupBtn.textContent = 'Änderungen speichern';
+        // WICHTIG: Die Registrierungsfunktion muss angepasst werden, um
+        // eine *Aktualisierung* statt einer *Neuerstellung* zu erkennen.
+        // Wir ändern den OnClick-Handler zu einer neuen Funktion:
+        setupBtn.setAttribute('onclick', 'handleProfileUpdate()');
+
         showSetup();
     }
 }
 
-function resetApp() {
-    if (confirm('⚠️ ACHTUNG: Alle deine Daten werden unwiderruflich gelöscht! Bist du sicher?')) {
-        if (confirm('Wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden!')) {
-            localStorage.removeItem('weightLossTracker');
-            location.reload();
-        }
+// NEU: Funktion zum Aktualisieren des Profils
+async function handleProfileUpdate() {
+    // Schritt 7 ist aktiv, alle Daten sind in userData
+    // Wir müssen nicht auth.createUser... aufrufen, nur saveData().
+    try {
+        await saveData();
+        showNotification("Profil erfolgreich aktualisiert!", "success");
+        // E-Mail/Passwort wieder einblenden für den Fall einer Neuregistrierung
+        document.getElementById('email').parentElement.style.display = 'block';
+        document.getElementById('password').parentElement.style.display = 'block';
+        // Button-Text und OnClick zurücksetzen
+        const setupBtn = document.querySelector('#step7 .btn-large');
+        setupBtn.textContent = 'Konto erstellen & Los geht\'s!';
+        setupBtn.setAttribute('onclick', 'handleRegistration()');
+        
+        // Dashboard neu laden
+        showDashboard();
+        initDashboard();
+
+    } catch (error) {
+        console.error("Fehler beim Profil-Update:", error);
+        showNotification("Fehler beim Speichern des Profils.", "error");
     }
 }
 
+
+// resetApp() wurde durch handleDeleteAccount() ersetzt
+
 function exportData() {
+    // Diese Funktion exportiert jetzt nur noch die *lokalen* Daten,
+    // was nützlich sein kann, aber nicht das Firebase-Backup ist.
     const dataStr = JSON.stringify(userData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `abnehm-tracker-backup-${getDateString(new Date())}.json`;
+    link.download = `calrank-lokal-backup-${getDateString(new Date())}.json`;
     link.click();
     URL.revokeObjectURL(url);
     
-    showNotification('✅ Daten exportiert!', 'success');
+    showNotification('✅ Lokale Daten exportiert!', 'success');
 }
 
 function importData(event) {
+    // Importiert auch nur LOKAL.
+    // Dies überschreibt die Firebase-Daten beim nächsten saveData()!
     const file = event.target.files[0];
     if (!file) return;
     
@@ -915,10 +1173,10 @@ function importData(event) {
         try {
             const imported = JSON.parse(e.target.result);
             
-            if (confirm('Möchtest du die importierten Daten wirklich verwenden? Deine aktuellen Daten werden überschrieben!')) {
+            if (confirm('Möchtest du die importierten Daten wirklich verwenden? Deine aktuellen Cloud-Daten werden beim nächsten Speichern überschrieben!')) {
                 userData = imported;
-                saveData();
-                location.reload();
+                saveData(); // Sofort in die Cloud pushen
+                location.reload(); // Neu laden, um Daten sauber zu initialisieren
             }
         } catch (error) {
             showNotification('❌ Fehler beim Importieren der Daten', 'error');
@@ -927,7 +1185,8 @@ function importData(event) {
     reader.readAsText(file);
 }
 
-// ==================== UTILITY FUNCTIONS ====================
+// ==================== UTILITY FUNCTIONS (Unverändert) ====================
+// ... (getDateString, formatDate, formatDateShort, showNotification) ...
 function getDateString(date) {
     return date.toISOString().split('T')[0];
 }
@@ -1002,7 +1261,7 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// ==================== KEYBOARD SHORTCUTS ====================
+// ==================== KEYBOARD SHORTCUTS (Unverändert) ====================
 document.addEventListener('keydown', function(e) {
     // ESC to close modals
     if (e.key === 'Escape') {
@@ -1012,15 +1271,11 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// ==================== SERVICE WORKER (Optional for offline support) ====================
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        // Uncomment to enable service worker
-        // navigator.serviceWorker.register('/sw.js');
-    });
-}
+// ==================== SERVICE WORKER (Unverändert) ====================
+// ...
 
-// ==================== VIEW SWITCHING ====================
+// ==================== VIEW SWITCHING (Unverändert) ====================
+// ...
 function switchView(view) {
     const dashboardView = document.getElementById('dashboardView');
     const rankingView = document.getElementById('rankingView');
@@ -1041,12 +1296,14 @@ function switchView(view) {
     }
 }
 
-// ==================== MOTIVATION HELPER ====================
+// ==================== MOTIVATION HELPER (Unverändert) ====================
+// ...
 function setMotivation(text) {
     document.getElementById('motivationReason').value = text;
 }
 
-// ==================== RANKING CONTENT LOADER ====================
+// ==================== RANKING CONTENT LOADER (Unverändert) ====================
+// ...
 function loadRankingContent() {
     const container = document.getElementById('rankingContent');
     if (container.innerHTML.trim() !== '' && !container.innerHTML.includes('wird dynamisch')) {
@@ -1243,7 +1500,8 @@ function loadRankingContent() {
     `;
 }
 
-// ==================== MEALS OVERVIEW ====================
+// ==================== MEALS OVERVIEW (Unverändert) ====================
+// ... (updateMealsOverview, updateMealCategory bleiben unverändert) ...
 function updateMealsOverview() {
     const todayData = getTodayData();
     const meals = todayData.meals || [];
@@ -1295,7 +1553,7 @@ function updateMealCategory(categoryId, data) {
     }
 }
 
-// ==================== STEPS TRACKING ====================
+// ==================== STEPS (WICHTIG: ruft saveData() auf) ====================
 function addSteps() {
     const steps = parseInt(document.getElementById('stepsValue').value);
     
@@ -1322,7 +1580,7 @@ function addSteps() {
     userData.dailyEntries[today].steps = steps;
     userData.dailyEntries[today].stepsCalories = caloriesBurned;
     
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     updateDashboard();
     closeModal('addSteps');
     
@@ -1333,7 +1591,7 @@ function addSteps() {
     showNotification(`✅ ${steps} Schritte gespeichert! (~${caloriesBurned} kcal verbrannt)`, 'success');
 }
 
-// ==================== SUPPLEMENT REMINDER ====================
+// ==================== SUPPLEMENTS (WICHTIG: ruft saveData() auf) ====================
 function checkSupplementReminder() {
     const reminderCard = document.getElementById('supplementReminder');
     
@@ -1360,7 +1618,7 @@ function toggleSupplementReminder() {
     }
     
     userData.settings.supplementReminder = enabled;
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     
     checkSupplementReminder();
     
@@ -1378,13 +1636,13 @@ function markSupplementsTaken() {
     }
     
     userData.settings.supplementTakenDate = today;
-    saveData();
+    saveData(); // <--- NEU: Speichert in Firestore
     
     checkSupplementReminder();
     showNotification('✅ Super! Supplements für heute erledigt!', 'success');
 }
 
-// ==================== RANKING SYSTEM ====================
+// ==================== RANKING SYSTEM (WICHTIG: ruft saveData() auf) ====================
 
 const RANKS = [
     { name: 'Iron', threshold: 0, icon: 'ranks/1iron.png', color: '#94a3b8' },
@@ -1415,6 +1673,7 @@ function calculateRankForPastDays() {
     
     const today = getDateString(new Date());
     const lastCalculated = userData.ranking.lastCalculated;
+    let calculationsDone = false;
     
     // Get all dates that need calculation
     const dates = Object.keys(userData.dailyEntries).sort();
@@ -1426,382 +1685,494 @@ function calculateRankForPastDays() {
         }
         
         calculateDayPoints(date);
+        calculationsDone = true;
     });
+    
+    if (calculationsDone) {
+        console.log("Ranking-Neuberechnung abgeschlossen. Speichere...");
+        saveData(); // <--- NEU: Speichert in Firestore nach Neuberechnung
+    }
     
     updateRankDisplay();
 }
 
 function calculateDayPoints(date) {
-    const entry = userData.dailyEntries[date];
-    if (!entry) return;
-    
-    let pointsEarned = 0;
-    let pointsLost = 0;
-    let breakdown = [];
-    
-    // ===== POSITIVE POINTS =====
-    
-    // 1. WEIGHT LOSS (HIGHEST PRIORITY - Most Points!)
-    const weightOnDate = getWeightForDate(date);
-    const previousWeight = getPreviousWeight(date);
-    
-    if (weightOnDate && previousWeight) {
-        const weightLoss = previousWeight - weightOnDate;
-        if (weightLoss > 0) {
-            // Reward weight loss significantly!
-            // 0.1kg = 15pts, 0.5kg = 75pts, 1kg = 150pts
-            const weightPoints = Math.round(weightLoss * 150);
-            pointsEarned += weightPoints;
-            breakdown.push(`✅ Gewichtsverlust (${weightLoss.toFixed(2)}kg): +${weightPoints}pts`);
-        } else if (weightLoss < -0.3) {
-            // Penalty for significant weight gain
-            const gainPenalty = Math.round(Math.abs(weightLoss) * 50);
-            pointsLost += gainPenalty;
-            breakdown.push(`❌ Gewichtszunahme: -${gainPenalty}pts`);
-        }
-    }
-    
-    // 2. WEIGHT ENTRY BONUS (Consistency is key!)
-    if (weightOnDate) {
-        pointsEarned += 30; // Big bonus for weighing in
-        breakdown.push(`✅ Gewicht eingetragen: +30pts`);
-    }
-    
-    // 3. CALORIE DEFICIT (Good adherence)
-    const targetCals = userData.profile.targetCalories;
-    const consumedCals = entry.calories || 0;
-    const calorieDeficit = targetCals - consumedCals;
-    
-    if (consumedCals > 0) {
-        if (calorieDeficit >= 0 && calorieDeficit <= targetCals * 0.15) {
-            // Perfect range: within target or 15% under
-            pointsEarned += 40;
-            breakdown.push(`✅ Kalorienziel erreicht: +40pts`);
-        } else if (calorieDeficit > targetCals * 0.15 && calorieDeficit <= targetCals * 0.3) {
-            // Good deficit (15-30% under)
-            pointsEarned += 30;
-            breakdown.push(`✅ Gutes Defizit: +30pts`);
-        } else if (calorieDeficit > targetCals * 0.3) {
-            // Too much deficit (potentially unhealthy)
-            pointsEarned += 15;
-            breakdown.push(`⚠️ Hohes Defizit: +15pts`);
-        }
-    }
-    
-    // 4. PROTEIN TARGET
-    const targetProtein = userData.profile.targetProtein;
-    const consumedProtein = entry.protein || 0;
-    
-    if (consumedProtein >= targetProtein * 0.9) {
-        // 90%+ of protein goal
-        pointsEarned += 35;
-        breakdown.push(`✅ Proteinziel erreicht: +35pts`);
-    } else if (consumedProtein >= targetProtein * 0.7) {
-        // 70-90% of protein goal
-        pointsEarned += 20;
-        breakdown.push(`✅ Protein gut: +20pts`);
-    } else if (consumedProtein < targetProtein * 0.5 && consumedProtein > 0) {
-        // Less than 50% protein (muscle loss risk)
-        pointsLost += 15;
-        breakdown.push(`❌ Zu wenig Protein: -15pts`);
-    }
-    
-    // 5. STEPS (Activity bonus)
-    const steps = entry.steps || 0;
-    if (steps >= 10000) {
-        pointsEarned += 25;
-        breakdown.push(`✅ 10.000+ Schritte: +25pts`);
-    } else if (steps >= 7500) {
-        pointsEarned += 20;
-        breakdown.push(`✅ 7.500+ Schritte: +20pts`);
-    } else if (steps >= 5000) {
-        pointsEarned += 15;
-        breakdown.push(`✅ 5.000+ Schritte: +15pts`);
-    } else if (steps >= 2500) {
-        pointsEarned += 10;
-        breakdown.push(`✅ 2.500+ Schritte: +10pts`);
-    } else if (steps < 1000 && steps > 0) {
-        pointsLost += 10;
-        breakdown.push(`❌ Unter 1.000 Schritte: -10pts`);
-    }
-    
-    // 6. MEAL CONSISTENCY (3 main meals)
-    const meals = entry.meals || [];
-    const hasBreakfast = meals.some(m => m.category === 'breakfast');
-    const hasLunch = meals.some(m => m.category === 'lunch');
-    const hasDinner = meals.some(m => m.category === 'dinner');
-    
-    const mainMealsCount = [hasBreakfast, hasLunch, hasDinner].filter(Boolean).length;
-    
-    if (mainMealsCount === 3) {
-        pointsEarned += 20;
-        breakdown.push(`✅ 3 Hauptmahlzeiten: +20pts`);
-    } else if (mainMealsCount === 2) {
-        pointsEarned += 10;
-        breakdown.push(`✅ 2 Hauptmahlzeiten: +10pts`);
-    } else if (mainMealsCount === 0 && meals.length > 0) {
-        pointsLost += 10;
-        breakdown.push(`❌ Keine Hauptmahlzeiten: -10pts`);
-    }
-    
-    // 7. TRACKING CONSISTENCY
-    if (consumedCals > 0) {
-        pointsEarned += 15;
-        breakdown.push(`✅ Kalorien getrackt: +15pts`);
-    } else {
-        pointsLost += 20;
-        breakdown.push(`❌ Keine Einträge: -20pts`);
-    }
-    
-    // ===== NEGATIVE POINTS =====
-    
-    // 8. CALORIE OVERAGE
-    if (calorieDeficit < 0) {
-        const overage = Math.abs(calorieDeficit);
-        if (overage <= 200) {
-            pointsLost += 10;
-            breakdown.push(`❌ Leichte Überschreitung: -10pts`);
-        } else if (overage <= 500) {
-            pointsLost += 25;
-            breakdown.push(`❌ Überschreitung (${overage}kcal): -25pts`);
-        } else {
-            const severePenalty = Math.round(25 + (overage - 500) / 100 * 5);
-            pointsLost += severePenalty;
-            breakdown.push(`❌ Hohe Überschreitung: -${severePenalty}pts`);
-        }
-    }
-    
-    // Calculate net points for the day
-    const netPoints = pointsEarned - pointsLost;
-    
-    // Update user ranking
-    userData.ranking.rankPoints += netPoints;
-    userData.ranking.totalPointsEarned += pointsEarned;
-    userData.ranking.totalPointsLost += pointsLost;
-    
-    // Prevent negative points
-    if (userData.ranking.rankPoints < 0) {
-        userData.ranking.rankPoints = 0;
-    }
-    
-    // Update rank based on points
-    updateRank();
-    
-    // Store in history
-    userData.ranking.rankHistory.push({
-        date: date,
-        pointsEarned: pointsEarned,
-        pointsLost: pointsLost,
-        netPoints: netPoints,
-        totalPoints: userData.ranking.rankPoints,
-        rank: userData.ranking.currentRank,
-        breakdown: breakdown
-    });
-    
-    // Update last calculated
-    userData.ranking.lastCalculated = date;
-    
-    saveData();
-    
-    console.log(`Day ${date}: +${pointsEarned} -${pointsLost} = ${netPoints} (Total: ${userData.ranking.rankPoints})`);
+    const entry = userData.dailyEntries[date];
+    if (!entry) return;
+    
+    let pointsEarned = 0;
+    let pointsLost = 0;
+    let breakdown = [];
+    
+    // ===== POSITIVE POINTS =====
+    
+    // 1. WEIGHT LOSS (HIGHEST PRIORITY - Most Points!)
+    const weightOnDate = getWeightForDate(date);
+    const previousWeight = getPreviousWeight(date);
+    
+    if (weightOnDate && previousWeight) {
+        const weightLoss = previousWeight - weightOnDate;
+        if (weightLoss > 0) {
+            // Reward weight loss significantly!
+            // 0.1kg = 15pts, 0.5kg = 75pts, 1kg = 150pts
+            const weightPoints = Math.round(weightLoss * 150);
+            pointsEarned += weightPoints;
+            breakdown.push(`✅ Gewichtsverlust (${weightLoss.toFixed(2)}kg): +${weightPoints}pts`);
+        } else if (weightLoss < -0.3) {
+            // Penalty for significant weight gain
+            const gainPenalty = Math.round(Math.abs(weightLoss) * 50);
+            pointsLost += gainPenalty;
+            breakdown.push(`❌ Gewichtszunahme: -${gainPenalty}pts`);
+        }
+    }
+    
+    // 2. WEIGHT ENTRY BONUS (Consistency is key!)
+    if (weightOnDate) {
+        pointsEarned += 30; // Big bonus for weighing in
+        breakdown.push(`✅ Gewicht eingetragen: +30pts`);
+    }
+    
+    // 3. CALORIE DEFICIT (Good adherence)
+    const targetCals = userData.profile.targetCalories;
+    const consumedCals = entry.calories || 0;
+    const calorieDeficit = targetCals - consumedCals;
+    
+    if (consumedCals > 0) {
+        if (calorieDeficit >= 0 && calorieDeficit <= targetCals * 0.15) {
+            // Perfect range: within target or 15% under
+            pointsEarned += 40;
+            breakdown.push(`✅ Kalorienziel erreicht: +40pts`);
+        } else if (calorieDeficit > targetCals * 0.15 && calorieDeficit <= targetCals * 0.3) {
+            // Good deficit (15-30% under)
+            pointsEarned += 30;
+            breakdown.push(`✅ Gutes Defizit: +30pts`);
+        } else if (calorieDeficit > targetCals * 0.3) {
+            // Too much deficit (potentially unhealthy)
+            pointsEarned += 15;
+            breakdown.push(`⚠️ Hohes Defizit: +15pts`);
+        }
+    }
+    
+    // 4. PROTEIN TARGET
+    const targetProtein = userData.profile.targetProtein;
+    const consumedProtein = entry.protein || 0;
+    
+    if (consumedProtein >= targetProtein * 0.9) {
+        // 90%+ of protein goal
+        pointsEarned += 35;
+        breakdown.push(`✅ Proteinziel erreicht: +35pts`);
+    } else if (consumedProtein >= targetProtein * 0.7) {
+        // 70-90% of protein goal
+        pointsEarned += 20;
+        breakdown.push(`✅ Protein gut: +20pts`);
+    } else if (consumedProtein < targetProtein * 0.5 && consumedProtein > 0) {
+        // Less than 50% protein (muscle loss risk)
+        pointsLost += 15;
+        breakdown.push(`❌ Zu wenig Protein: -15pts`);
+    }
+    
+    // 5. STEPS (Activity bonus)
+    const steps = entry.steps || 0;
+    if (steps >= 10000) {
+        pointsEarned += 25;
+        breakdown.push(`✅ 10.000+ Schritte: +25pts`);
+    } else if (steps >= 7500) {
+        pointsEarned += 20;
+        breakdown.push(`✅ 7.500+ Schritte: +20pts`);
+    } else if (steps >= 5000) {
+        pointsEarned += 15;
+        breakdown.push(`✅ 5.000+ Schritte: +15pts`);
+    } else if (steps >= 2500) {
+        pointsEarned += 10;
+        breakdown.push(`✅ 2.500+ Schritte: +10pts`);
+    } else if (steps < 1000 && steps > 0) {
+        pointsLost += 10;
+        breakdown.push(`❌ Unter 1.000 Schritte: -10pts`);
+    }
+    
+    // 6. MEAL CONSISTENCY (3 main meals)
+    const meals = entry.meals || [];
+    const hasBreakfast = meals.some(m => m.category === 'breakfast');
+    const hasLunch = meals.some(m => m.category === 'lunch');
+    const hasDinner = meals.some(m => m.category === 'dinner');
+    
+    const mainMealsCount = [hasBreakfast, hasLunch, hasDinner].filter(Boolean).length;
+    
+    if (mainMealsCount === 3) {
+        pointsEarned += 20;
+        breakdown.push(`✅ 3 Hauptmahlzeiten: +20pts`);
+    } else if (mainMealsCount === 2) {
+        pointsEarned += 10;
+        breakdown.push(`✅ 2 Hauptmahlzeiten: +10pts`);
+    } else if (mainMealsCount === 0 && meals.length > 0) {
+        pointsLost += 10;
+        breakdown.push(`❌ Keine Hauptmahlzeiten: -10pts`);
+   }
+    
+    // 7. TRACKING CONSISTENCY
+    if (consumedCals > 0) {
+        pointsEarned += 15;
+        breakdown.push(`✅ Kalorien getrackt: +15pts`);
+    } else {
+        pointsLost += 20;
+        breakdown.push(`❌ Keine Einträge: -20pts`);
+    }
+    
+    // ===== NEGATIVE POINTS =====
+    
+    // 8. CALORIE OVERAGE
+    if (calorieDeficit < 0) {
+        const overage = Math.abs(calorieDeficit);
+        if (overage <= 200) {
+            pointsLost += 10;
+            breakdown.push(`❌ Leichte Überschreitung: -10pts`);
+        } else if (overage <= 500) {
+            pointsLost += 25;
+            breakdown.push(`❌ Überschreitung (${overage}kcal): -25pts`);
+        } else {
+            const severePenalty = Math.round(25 + (overage - 500) / 100 * 5);
+            pointsLost += severePenalty;
+            breakdown.push(`❌ Hohe Überschreitung: -${severePenalty}pts`);
+        }
+    }
+    
+    // Calculate net points for the day
+    const netPoints = pointsEarned - pointsLost;
+    
+    // Update user ranking
+    userData.ranking.rankPoints += netPoints;
+    userData.ranking.totalPointsEarned += pointsEarned;
+    userData.ranking.totalPointsLost += pointsLost;
+    
+    // Prevent negative points
+    if (userData.ranking.rankPoints < 0) {
+        userData.ranking.rankPoints = 0;
+    }
+    
+    // Update rank based on points
+    updateRank(); // Diese Funktion prüft auch auf Rank Up
+    
+    // Store in history
+    userData.ranking.rankHistory.push({
+        date: date,
+        pointsEarned: pointsEarned,
+        pointsLost: pointsLost,
+        netPoints: netPoints,
+        totalPoints: userData.ranking.rankPoints,
+        rank: userData.ranking.currentRank,
+        breakdown: breakdown
+    });
+    
+    // Update last calculated
+    userData.ranking.lastCalculated = date;
+    
+    // saveData() wird am Ende von calculateRankForPastDays() aufgerufen
+    
+    console.log(`Day ${date}: +${pointsEarned} -${pointsLost} = ${netPoints} (Total: ${userData.ranking.rankPoints})`);
 }
 
 function updateRank() {
-    const points = userData.ranking.rankPoints;
-    
-    // Find appropriate rank
-    for (let i = RANKS.length - 1; i >= 0; i--) {
-        if (points >= RANKS[i].threshold) {
-            const oldRank = userData.ranking.currentRank;
-            userData.ranking.currentRank = i;
-            
-            // Show notification on rank up
-            if (i > oldRank) {
-                showRankUpNotification(i, oldRank);
-            }
-            break;
-        }
-    }
+    const points = userData.ranking.rankPoints;
+    
+    // Find appropriate rank
+    for (let i = RANKS.length - 1; i >= 0; i--) {
+        if (points >= RANKS[i].threshold) {
+            const oldRank = userData.ranking.currentRank;
+            userData.ranking.currentRank = i;
+            
+            // Show notification on rank up
+            if (i > oldRank) {
+                showRankUpNotification(i, oldRank);
+            }
+            break;
+        }
+    }
 }
 
 function showRankUpNotification(newRank, oldRank) {
-    const rankInfo = RANKS[newRank];
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, ${rankInfo.color}22 0%, ${rankInfo.color}44 100%);
-        border: 3px solid ${rankInfo.color};
-        color: white;
-        padding: 2rem 3rem;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        z-index: 10001;
-        animation: rankUpAnimation 0.5s ease-out;
-        text-align: center;
-        min-width: 300px;
-    `;
-    
-    notification.innerHTML = `
-        <div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
-        <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">RANK UP!</div>
-        <div style="font-size: 1.125rem; margin-bottom: 1rem;">
-            ${RANKS[oldRank].name} → <span style="color: ${rankInfo.color}; font-weight: 700;">${rankInfo.name}</span>
-        </div>
-        <img src="${rankInfo.icon}" style="width: 80px; height: 80px; margin: 1rem auto;" onerror="this.style.display='none'">
-        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 1rem;">
-            ${userData.ranking.rankPoints} Punkte
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'rankUpOut 0.5s ease-out';
-        setTimeout(() => notification.remove(), 500);
-    }, 4000);
+    const rankInfo = RANKS[newRank];
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, ${rankInfo.color}22 0%, ${rankInfo.color}44 100%);
+        border: 3px solid ${rankInfo.color};
+        color: white;
+        padding: 2rem 3rem;
+        border-radius: 20px;
+  d     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        z-index: 10001;
+        animation: rankUpAnimation 0.5s ease-out;
+        text-align: center;
+        min-width: 300px;
+    `;
+    
+    notification.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
+        <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">RANK UP!</div>
+        <div style="font-size: 1.125rem; margin-bottom: 1rem;">
+            ${RANKS[oldRank].name} → <span style="color: ${rankInfo.color}; font-weight: 700;">${rankInfo.name}</span>
+        </div>
+        <img src="${rankInfo.icon}" style="width: 80px; height: 80px; margin: 1rem auto;" onerror="this.style.display='none'">
+        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 1rem;">
+            ${userData.ranking.rankPoints} Punkte
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'rankUpOut 0.5s ease-out';
+        setTimeout(() => notification.remove(), 500);
+    }, 4000);
 }
 
 function getWeightForDate(date) {
-    const entry = userData.weightEntries.find(e => e.date === date);
-    return entry ? entry.weight : null;
+    const entry = userData.weightEntries.find(e => e.date === date);
+    return entry ? entry.weight : null;
 }
 
 function getPreviousWeight(date) {
-    const currentDate = new Date(date);
-    const sortedWeights = [...userData.weightEntries]
-        .filter(e => new Date(e.date) < currentDate)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    return sortedWeights.length > 0 ? sortedWeights[0].weight : null;
+    const currentDate = new Date(date);
+    const sortedWeights = [...userData.weightEntries]
+        .filter(e => new Date(e.date) < currentDate)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return sortedWeights.length > 0 ? sortedWeights[0].weight : null;
 }
 
 function updateRankDisplay() {
-    initializeRanking();
-    
-    const currentRank = userData.ranking.currentRank;
-    const rankInfo = RANKS[currentRank];
-    const points = userData.ranking.rankPoints;
-    
-    // Update rank card
-    const rankIconEl = document.getElementById('rankIcon');
-    const rankNameEl = document.getElementById('rankName');
-    const rankPointsEl = document.getElementById('rankPoints');
-    
-    if (rankIconEl) rankIconEl.src = rankInfo.icon;
-    if (rankNameEl) rankNameEl.textContent = rankInfo.name;
-    if (rankPointsEl) rankPointsEl.textContent = points;
-    
-    // Calculate progress to next rank
-    const rankProgressEl = document.getElementById('rankProgress');
-    const nextRankNameEl = document.getElementById('nextRankName');
-    const pointsToNextEl = document.getElementById('pointsToNext');
-    
-    if (currentRank < RANKS.length - 1) {
-        const nextRank = RANKS[currentRank + 1];
-        const currentThreshold = RANKS[currentRank].threshold;
-        const nextThreshold = nextRank.threshold;
-        const progress = ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100;
-        
-        if (rankProgressEl) {
-            rankProgressEl.style.width = Math.min(progress, 100) + '%';
-            rankProgressEl.style.background = `linear-gradient(90deg, ${rankInfo.color} 0%, ${nextRank.color} 100%)`;
-        }
-        if (nextRankNameEl) nextRankNameEl.textContent = nextRank.name;
-        if (pointsToNextEl) pointsToNextEl.textContent = Math.max(0, nextThreshold - points);
-    } else {
-        // Max rank reached
-        if (rankProgressEl) {
-            rankProgressEl.style.width = '100%';
-            rankProgressEl.style.background = rankInfo.color;
-        }
-        if (nextRankNameEl) nextRankNameEl.textContent = 'MAX';
-        if (pointsToNextEl) pointsToNextEl.textContent = '0';
-    }
-    
-    // Update rank color theme
-    const rankCardEl = document.getElementById('rankCard');
-    if (rankCardEl) rankCardEl.style.borderColor = rankInfo.color;
-    if (rankNameEl) rankNameEl.style.color = rankInfo.color;
-    
-    // Update time until calculation
-    updateTimeUntilCalculation();
+    initializeRanking();
+    
+    const currentRank = userData.ranking.currentRank;
+    const rankInfo = RANKS[currentRank];
+    const points = userData.ranking.rankPoints;
+    
+    // Update rank card
+    const rankIconEl = document.getElementById('rankIcon');
+    const rankNameEl = document.getElementById('rankName');
+    const rankPointsEl = document.getElementById('rankPoints');
+    
+    if (rankIconEl) rankIconEl.src = rankInfo.icon;
+    if (rankNameEl) rankNameEl.textContent = rankInfo.name;
+    if (rankPointsEl) rankPointsEl.textContent = points;
+    
+    // Calculate progress to next rank
+    const rankProgressEl = document.getElementById('rankProgress');
+    const nextRankNameEl = document.getElementById('nextRankName');
+    const pointsToNextEl = document.getElementById('pointsToNext');
+    
+    if (currentRank < RANKS.length - 1) {
+        const nextRank = RANKS[currentRank + 1];
+        const currentThreshold = RANKS[currentRank].threshold;
+        const nextThreshold = nextRank.threshold;
+        const progress = ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100;
+        
+        if (rankProgressEl) {
+            rankProgressEl.style.width = Math.min(progress, 100) + '%';
+            rankProgressEl.style.background = `linear-gradient(90deg, ${rankInfo.color} 0%, ${nextRank.color} 100%)`;
+        }
+        if (nextRankNameEl) nextRankNameEl.textContent = nextRank.name;
+        if (pointsToNextEl) pointsToNextEl.textContent = Math.max(0, nextThreshold - points);
+    } else {
+        // Max rank reached
+        if (rankProgressEl) {
+            rankProgressEl.style.width = '100%';
+            rankProgressEl.style.background = rankInfo.color;
+        }
+        if (nextRankNameEl) nextRankNameEl.textContent = 'MAX';
+        if (pointsToNextEl) pointsToNextEl.textContent = '0';
+    }
+    
+    // Update rank color theme
+    const rankCardEl = document.getElementById('rankCard');
+    if (rankCardEl) rankCardEl.style.borderColor = rankInfo.color;
+    if (rankNameEl) rankNameEl.style.color = rankInfo.color;
+    
+    // Update time until calculation
+    updateTimeUntilCalculation();
 }
 
 function updateTimeUntilCalculation() {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    
-    const diff = midnight - now;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    const rankTipEl = document.querySelector('.rank-tip');
-    if (rankTipEl) {
-        rankTipEl.innerHTML = `⏰ Nächste Berechnung in: <strong>${hours}h ${minutes}m</strong>`;
-    }
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    
+    const diff = midnight - now;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    const rankTipEl = document.querySelector('.rank-tip');
+    if (rankTipEl && !rankTipEl.innerHTML.includes('💭')) { // Nicht überschreiben, wenn Motivations-Spruch da ist
+        rankTipEl.innerHTML = `⏰ Nächste Berechnung in: <strong>${hours}h ${minutes}m</strong>`;
+    }
 }
 
 // Update countdown every minute
 setInterval(() => {
-    if (userData.setupComplete && document.getElementById('rankCard')) {
-        updateTimeUntilCalculation();
-    }
+    if (userData.setupComplete && document.getElementById('rankCard')) {
+        updateTimeUntilCalculation();
+    }
 }, 60000);
 
 function viewRankHistory() {
-    openModal('rankHistory');
-    
-    // Update stats summary
-    document.getElementById('totalRankPoints').textContent = userData.ranking.rankPoints || 0;
-    document.getElementById('totalEarnedPoints').textContent = userData.ranking.totalPointsEarned || 0;
-    document.getElementById('totalLostPoints').textContent = userData.ranking.totalPointsLost || 0;
-    
-    displayRankHistory();
+    openModal('rankHistory');
+    
+    // Update stats summary
+    document.getElementById('totalRankPoints').textContent = userData.ranking.rankPoints || 0;
+    document.getElementById('totalEarnedPoints').textContent = userData.ranking.totalPointsEarned || 0;
+    document.getElementById('totalLostPoints').textContent = userData.ranking.totalPointsLost || 0;
+    
+    displayRankHistory();
 }
 
 function displayRankHistory() {
-    const container = document.getElementById('rankHistoryContent');
-    const history = [...(userData.ranking.rankHistory || [])].reverse().slice(0, 30);
-    
-    if (history.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Noch keine Rank-Historie vorhanden. Rank-Punkte werden am Ende jedes Tages berechnet.</p>';
-        return;
-    }
-    
-    container.innerHTML = history.map(entry => {
-        const rankInfo = RANKS[entry.rank];
-        const netClass = entry.netPoints >= 0 ? 'positive' : 'negative';
-        const netSign = entry.netPoints >= 0 ? '+' : '';
-        
-        return `
-            <div class="history-day-card">
-                <div class="history-day-header">
-                    <div>
-                        <div class="history-day-date">${formatDate(new Date(entry.date))}</div>
-                        <div class="history-day-rank">
-                            <img src="${rankInfo.icon}" style="width: 24px; height: 24px; vertical-align: middle;" onerror="this.style.display='none'">
-                            <span style="color: ${rankInfo.color}; font-weight: 600;">${rankInfo.name}</span>
-                        </div>
-                    </div>
-                    <div class="history-day-points ${netClass}">
-                        ${netSign}${entry.netPoints} pts
-                    </div>
-                </div>
-                <div class="history-day-breakdown">
-                    <div class="breakdown-stats">
-                        <span class="stat-earned">+${entry.pointsEarned}</span>
-                        <span class="stat-lost">-${entry.pointsLost}</span>
-                        <span class="stat-total">Total: ${entry.totalPoints}</span>
-                    </div>
-                    <div class="breakdown-details">
-                        ${entry.breakdown.map(item => `<div class="breakdown-item">${item}</div>`).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
+    const container = document.getElementById('rankHistoryContent');
+    const history = [...(userData.ranking.rankHistory || [])].reverse().slice(0, 30);
+    
+    if (history.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Noch keine Rank-Historie vorhanden. Rank-Punkte werden am Ende jedes Tages berechnet.</p>';
+        return;
+    }
+    
+    container.innerHTML = history.map(entry => {
+        const rankInfo = RANKS[entry.rank];
+        const netClass = entry.netPoints >= 0 ? 'positive' : 'negative';
+        const netSign = entry.netPoints >= 0 ? '+' : '';
+        
+        return `
+            <div class="history-day-card">
+                <div class="history-day-header">
+                    <div>
+                        <div class="history-day-date">${formatDate(new Date(entry.date))}</div>
+                        <div class="history-day-rank">
+                            <img src="${rankInfo.icon}" style="width: 24px; height: 24px; vertical-align: middle;" onerror="this.style.display='none'">
+                            <span style="color: ${rankInfo.color}; font-weight: 600;">${rankInfo.name}</span>
+                        </div>
+                    </div>
+                    <div class="history-day-points ${netClass}">
+                        ${netSign}${entry.netPoints} pts
+                    </div>
+                </div>
+                <div class="history-day-breakdown">
+                    <div class="breakdown-stats">
+                        <span class="stat-earned">+${entry.pointsEarned}</span>
+                        <span class="stat-lost">-${entry.pointsLost}</span>
+                        <span class="stat-total">Total: ${entry.totalPoints}</span>
+                    </div>
+                    <div class="breakdown-details">
+                        ${entry.breakdown.map(item => `<div class="breakdown-item">${item}</div>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+
+// ==================== LEADERBOARD (NEU) ====================
+
+function listenForLeaderboard() {
+    console.log("Leaderboard-Listener wird gestartet...");
+    const container = document.getElementById('leaderboardList');
+
+    // Erstelle eine Abfrage: 'users'-Collection, sortiert nach 'ranking.rankPoints' absteigend, limitiert auf 5
+    const query = db.collection('users')
+                    .orderBy('ranking.rankPoints', 'desc')
+                    .limit(5);
+    
+    // .onSnapshot erstellt einen Echtzeit-Listener
+    const unsubscribe = query.onSnapshot(snapshot => {
+        console.log("Leaderboard-Daten empfangen:", snapshot.docs.length, "Einträge");
+        const users = snapshot.docs;
+        updateLeaderboardUI(users);
+    }, error => {
+        console.error("Fehler beim Abrufen des Leaderboards:", error);
+        container.innerHTML = '<p class="leaderboard-placeholder">Leaderboard konnte nicht geladen werden.</p>';
+    });
+
+    return unsubscribe; // Gibt die Funktion zurück, um den Listener zu stoppen (beim Logout)
+}
+
+function updateLeaderboardUI(docs) {
+    const container = document.getElementById('leaderboardList');
+    if (!docs || docs.length === 0) {
+        container.innerHTML = '<p class="leaderboard-placeholder">Noch keine Einträge im Leaderboard.</p>';
+        return;
+    }
+
+    container.innerHTML = ''; // Container leeren
+    
+    docs.forEach((doc, index) => {
+        const data = doc.data();
+        const profile = data.profile;
+        const ranking = data.ranking;
+        
+        // 1. Name
+        const name = profile.name || 'Unbekannt';
+        
+        // 2. Rang, Icon, Punkte
+        const rankInfo = RANKS[ranking.currentRank || 0];
+        const points = ranking.rankPoints || 0;
+        
+        // 3. Streak (muss aus den Daten des Users berechnet werden)
+        const streak = calculateUserStreak(data.dailyEntries || {});
+        
+        // 4. Gewichtsverlust
+        const startWeight = profile.startWeight || 0;
+        let latestWeight = profile.currentWeight || 0;
+        
+        if (data.weightEntries && data.weightEntries.length > 0) {
+            const sortedWeights = [...data.weightEntries].sort((a, b) => new Date(b.date) - new Date(a.date));
+            latestWeight = sortedWeights[0].weight;
+        }
+        
+        const totalLost = startWeight - latestWeight;
+        const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
+        
+        // HTML erstellen
+        const entryHTML = `
+            <div class="leaderboard-entry">
+                <span class="leaderboard-pos">${index + 1}.</span>
+                <span class="leaderboard-name" title="${name}">${name}</span>
+                <div class="leaderboard-rank">
+                    <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
+                    <span>${points}</span>
+                </div>
+                <div class="leaderboard-stat streak">🔥 <strong>${streak}</strong></div>
+                <div class="leaderboard-stat kg">📉 <strong>${totalLostDisplay}</strong> kg</div>
+            </div>
+        `;
+        
+        container.innerHTML += entryHTML;
+    });
+}
+
+// Helferfunktion, um Streak für *andere* User im Leaderboard zu berechnen
+function calculateUserStreak(dailyEntries) {
+    const dates = Object.keys(dailyEntries).sort().reverse();
+    let streak = 0;
+    let currentDate = new Date();
+    
+    for (let i = 0; i < dates.length; i++) {
+        const checkDate = getDateString(currentDate);
+        if (dates.includes(checkDate)) {
+            const entry = dailyEntries[checkDate];
+            if (entry && (entry.calories > 0 || entry.meals.length > 0 || entry.steps > 0)) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+            } else {
+                break;
+            }
+        } else {
+             if (i === 0 && dates.length > 1 && dates[1] === getDateString(new Date(new Date().setDate(new Date().getDate() - 1)))) {
+                // Heute ist leer, aber gestern wurde getrackt.
+             } else {
+                break;
+            }
+        }
+    }
+    return streak;
 }

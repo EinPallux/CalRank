@@ -6,10 +6,117 @@
     <title>CalRank - Dein Abnehm Tracker mit Ranking</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            /* Höhe wird durch bento-item gesteuert */
+        }
+        .leaderboard-entry {
+            display: grid;
+            /* Spalten: Pos | Name | Rang (Icon+Punkte) | Streak | kg */
+            grid-template-columns: 20px 1fr 120px 80px 80px;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            border: 1px solid var(--border-color);
+        }
+        .leaderboard-entry:nth-child(1) .leaderboard-pos { color: #f59e0b; /* Gold */ }
+        .leaderboard-entry:nth-child(2) .leaderboard-pos { color: #c0c0c0; /* Silber */ }
+        .leaderboard-entry:nth-child(3) .leaderboard-pos { color: #cd7f32; /* Bronze */ }
+        
+        .leaderboard-pos {
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: center;
+        }
+        .leaderboard-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .leaderboard-rank {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .leaderboard-rank img {
+            width: 24px;
+            height: 24px;
+        }
+        .leaderboard-rank span {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .leaderboard-stat {
+            text-align: right;
+            color: var(--text-secondary);
+        }
+        .leaderboard-stat strong {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .leaderboard-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100px; /* Mindesthöhe für das Bento-Item */
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Kleine Anpassung für mobile Ansicht des Leaderboards */
+        @media (max-width: 768px) {
+            .leaderboard-entry {
+                grid-template-columns: 20px 1fr 80px; /* Pos | Name | kg */
+                gap: 0.5rem;
+            }
+            .leaderboard-rank, .leaderboard-stat.streak {
+                display: none; /* Auf Mobilgeräten Rank und Streak ausblenden für Platz */
+            }
+        }
+    </style>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+    // TODO: Ersetze dies durch deine Firebase-Projektdaten
+const firebaseConfig = {
+  apiKey: "AIzaSyCRnI5XtBzJoqF3inPryq1utDLH25XN94E",
+  authDomain: "calrank-web.firebaseapp.com",
+  projectId: "calrank-web",
+  storageBucket: "calrank-web.firebasestorage.app",
+  messagingSenderId: "896423562978",
+  appId: "1:896423562978:web:e2642a443db9f7c9c858bb",
+  measurementId: "G-QEN8CXMS68"
+};
+    // Firebase initialisieren
+    let app, auth, db;
+    try {
+        app = firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+    } catch (e) {
+        console.error("Firebase-Initialisierung fehlgeschlagen:", e);
+        alert("Firebase konnte nicht initialisiert werden. Bitte überprüfe deine Konfiguration.");
+    }
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- Setup Screen -->
     <div id="setupScreen" class="setup-screen">
         <div class="setup-container">
             <div class="setup-header">
@@ -24,11 +131,10 @@
                 <span class="progress-text">Schritt <span id="currentStep">1</span> von 7</span>
             </div>
 
-            <!-- Step 1: Persönliche Daten -->
             <div class="setup-step active" id="step1">
-                <h2>Persönliche Daten</h2>
+                <h2>Persönliche Daten & Konto</h2>
                 <div class="form-group">
-                    <label for="name">Dein Name</label>
+                    <label for="name">Dein Name (Wird im Leaderboard angezeigt)</label>
                     <input type="text" id="name" placeholder="z.B. Max">
                 </div>
                 <div class="form-row">
@@ -44,10 +150,21 @@
                         </select>
                     </div>
                 </div>
+                <div class="form-group" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                    <label for="email">E-Mail</label>
+                    <input type="email" id="email" placeholder="deine@email.de" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Passwort</label>
+                    <input type="password" id="password" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+                </div>
                 <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+                
+                <p style="text-align: center; margin-top: 1.5rem; color: var(--text-secondary);">
+                    Schon ein Konto? <a href="#" onclick="showLoginScreen(event)" style="color: var(--primary-light);">Jetzt anmelden</a>
+                </p>
             </div>
 
-            <!-- Step 2: Körperdaten -->
             <div class="setup-step" id="step2">
                 <h2>Körperdaten</h2>
                 <div class="form-row">
@@ -70,7 +187,6 @@
                 </div>
             </div>
 
-            <!-- Step 3: Aktivitätslevel -->
             <div class="setup-step" id="step3">
                 <h2>Aktivitätslevel</h2>
                 <p class="step-description">Wie aktiv bist du im Alltag?</p>
@@ -122,7 +238,6 @@
                 </div>
             </div>
 
-            <!-- Step 4: Abnehmziel -->
             <div class="setup-step" id="step4">
                 <h2>Dein Abnehmziel</h2>
                 <p class="step-description">Wie schnell möchtest du abnehmen?</p>
@@ -162,7 +277,6 @@
                 </div>
             </div>
 
-            <!-- Step 5: Ranking-System -->
             <div class="setup-step" id="step5">
                 <h2>🏆 Ranking-System</h2>
                 <p class="step-description">Sammle Punkte und steige in den Rängen auf!</p>
@@ -235,7 +349,6 @@
                 </div>
             </div>
 
-            <!-- Step 6: Motivation/Reason -->
             <div class="setup-step" id="step6">
                 <h2>💪 Deine Motivation</h2>
                 <p class="step-description">Warum möchtest du abnehmen? Dieser Grund wird dich durch schwierige Zeiten begleiten!</p>
@@ -271,7 +384,6 @@
                 </div>
             </div>
 
-            <!-- Step 7: Zusammenfassung -->
             <div class="setup-step" id="step7">
                 <h2>Zusammenfassung</h2>
                 <div class="summary-card">
@@ -313,15 +425,36 @@
                 </div>
                 <div class="button-group">
                     <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
-                    <button class="btn btn-primary btn-large" onclick="completeSetup()">Los geht's!</button>
+                    <button class="btn btn-primary btn-large" onclick="handleRegistration()">Konto erstellen & Los geht's!</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Dashboard -->
+    <div id="loginScreen" class="setup-screen hidden">
+        <div class="setup-container">
+            <div class="setup-header">
+                <h1>🎯 Willkommen zurück!</h1>
+                <p>Melde dich an, um deine Fortschritte zu sehen.</p>
+            </div>
+            <div class="setup-step active"> <div class="form-group">
+                    <label for="loginEmail">E-Mail</label>
+                    <input type="email" id="loginEmail" placeholder="deine@email.de" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Passwort</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <button class="btn btn-primary btn-large" onclick="handleLogin()" style="width: 100%;">Anmelden</button>
+                <p style="text-align: center; margin-top: 1.5rem; color: var(--text-secondary);">
+                    Noch kein Konto? <a href="#" onclick="showSetupScreen(event)" style="color: var(--primary-light);">Jetzt registrieren</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+
     <div id="dashboard" class="dashboard hidden">
-        <!-- Header -->
         <header class="header">
             <div class="header-content">
                 <div class="logo">
@@ -333,17 +466,15 @@
                 </nav>
                 <div class="header-actions">
                     <span class="welcome-text">Hallo, <span id="userName">-</span>!</span>
+                    <button class="btn-icon" onclick="handleLogout()" title="Abmelden">🚪</button>
                     <button class="btn-icon" onclick="openSettings()" title="Einstellungen">⚙️</button>
                 </div>
             </div>
         </header>
 
-        <!-- Dashboard View -->
         <div id="dashboardView" class="view-content">
             <div class="main-content">
-            <!-- Bento Grid Layout -->
             <div class="bento-grid">
-                <!-- Rank Card (Large) -->
                 <div class="bento-item rank-item" id="rankCard">
                     <div class="rank-card-content">
                         <div class="rank-header">
@@ -373,13 +504,12 @@
                                 <span><strong id="pointsToNext">200</strong> Punkte</span>
                             </div>
                         </div>
-                        <div class="rank-tip">
+                        <div class="rank-tip" id="statusMessage">
                             💡 Rang wird am Ende jedes Tages aktualisiert
                         </div>
                     </div>
                 </div>
 
-                <!-- Today Stats (Medium) -->
                 <div class="bento-item stats-item">
                     <div class="bento-header">
                         <h3>Heute</h3>
@@ -410,7 +540,6 @@
                     </div>
                 </div>
 
-                <!-- Weight Info (Small) -->
                 <div class="bento-item weight-item">
                     <h3>⚖️ Gewicht</h3>
                     <div class="weight-display">
@@ -419,18 +548,23 @@
                     </div>
                 </div>
 
-                <!-- Streak (Small) -->
                 <div class="bento-item streak-item">
                     <h3>🔥 Streak</h3>
                     <div class="streak-display" id="streakBadge">0 Tage</div>
                 </div>
 
-                <!-- Status Message (Wide) -->
-                <div class="bento-item status-item">
-                    <div class="status-message-bento" id="statusMessage"></div>
+                <div class="bento-item leaderboard-item" style="grid-column: span 4; grid-row: span 1; padding: 1.5rem 1rem;">
+                    <div class="bento-header">
+                        <h3>🏆 Leaderboard (Top 5)</h3>
+                        <span class="date-badge">Freunde</span>
+                    </div>
+                    <div class="leaderboard-list" id="leaderboardList">
+                        <div class="leaderboard-placeholder">
+                            <p>Leaderboard wird geladen...</p>
+                        </div>
+                        </div>
                 </div>
 
-                <!-- Quick Actions (Wide) -->
                 <div class="bento-item actions-item">
                     <div class="quick-actions-bento">
                         <button class="action-btn-bento" onclick="openModal('addCalories')">
@@ -453,7 +587,6 @@
                 </div>
             </div>
 
-            <!-- Supplement Reminder (if enabled) -->
             <div class="card supplement-reminder hidden" id="supplementReminder">
                 <div class="reminder-content">
                     <span class="reminder-icon">💊</span>
@@ -465,7 +598,6 @@
                 </div>
             </div>
 
-            <!-- Today's Meals Overview -->
             <div class="card meals-overview-card">
                 <div class="card-header">
                     <h2>Heutige Mahlzeiten</h2>
@@ -515,7 +647,6 @@
                 </div>
             </div>
 
-            <!-- Weight Chart -->
             <div class="card">
                 <div class="card-header">
                     <h2>Gewichtsverlauf</h2>
@@ -530,7 +661,6 @@
                 </div>
             </div>
 
-            <!-- Statistics Grid -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-card-header">
@@ -585,21 +715,14 @@
             </div>
             </div>
         </div>
-        <!-- End Dashboard View -->
-
-        <!-- Ranking System View -->
         <div id="rankingView" class="view-content hidden">
             <div class="main-content">
                 <div class="ranking-explanation" id="rankingContent">
-                    <!-- Content wird dynamisch von loadRankingContent() geladen -->
-                </div>
+                    </div>
             </div>
         </div>
-        <!-- End Ranking View -->
-    </div>
+        </div>
 
-    <!-- Modals -->
-    <!-- Add Calories Modal -->
     <div id="addCaloriesModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -639,7 +762,6 @@
         </div>
     </div>
 
-    <!-- Add Weight Modal -->
     <div id="addWeightModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -660,7 +782,6 @@
         </div>
     </div>
 
-    <!-- Add Steps Modal -->
     <div id="addStepsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -687,7 +808,6 @@
         </div>
     </div>
 
-    <!-- History Modal -->
     <div id="viewHistoryModal" class="modal">
         <div class="modal-content large">
             <div class="modal-header">
@@ -705,7 +825,6 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div id="settingsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -716,7 +835,7 @@
                 <div class="settings-section">
                     <h3>Profil</h3>
                     <button class="btn btn-secondary" onclick="editProfile()">Profil bearbeiten</button>
-                    <button class="btn btn-danger" onclick="resetApp()">Alle Daten löschen</button>
+                    <button class="btn btn-danger" onclick="handleDeleteAccount()">Konto & Daten löschen</button>
                 </div>
                 <div class="settings-section">
                     <h3>Erinnerungen</h3>
@@ -734,7 +853,10 @@
                     </div>
                 </div>
                 <div class="settings-section">
-                    <h3>Export/Import</h3>
+                    <h3>Export/Import (Lokal)</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                        Dies exportiert/importiert nur deine lokalen Daten, nicht dein Firebase-Konto.
+                    </p>
                     <button class="btn btn-secondary" onclick="exportData()">Daten exportieren</button>
                     <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Daten importieren</button>
                     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
@@ -743,7 +865,6 @@
         </div>
     </div>
 
-    <!-- Rank History Modal -->
     <div id="rankHistoryModal" class="modal">
         <div class="modal-content large">
             <div class="modal-header">
