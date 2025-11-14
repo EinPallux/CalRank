@@ -2132,7 +2132,7 @@ function startLeaderboardListener() {
 
 // NEU: Aktualisiert die UI der neuen Leaderboard-Seite
 function updateLeaderboardPage(docs) {
-    const container = document.getElementById('fullLeaderboardList');
+    const container = document.getElementById('fullLeaderboardList');
     const currentUserId = auth.currentUser ? auth.currentUser.uid : null;
     
     // Update "Zuletzt aktualisiert" Badge
@@ -2141,74 +2141,74 @@ function updateLeaderboardPage(docs) {
         timestampEl.textContent = `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
     }
 
-    if (!docs || docs.length === 0) {
-        container.innerHTML = '<p class="leaderboard-placeholder">Noch keine Einträge im Leaderboard.</p>';
-        return;
-    }
+    if (!docs || docs.length === 0) {
+        container.innerHTML = '<p class="leaderboard-placeholder">Noch keine Einträge im Leaderboard.</p>';
+        return;
+    }
 
-    container.innerHTML = ''; // Container leeren
-    
-    docs.forEach((doc, index) => {
-        const data = doc.data();
+    container.innerHTML = ''; // Container leeren
+    
+    docs.forEach((doc, index) => {
+        const data = doc.data();
         const isCurrentUser = doc.id === currentUserId;
-        
-        const profile = data.profile;
-        const ranking = data.ranking;
-        
-        // 1. Name
-        const name = profile.name || 'Unbekannt';
-        
-        // 2. Rang, Icon, Punkte
-        const rankInfo = RANKS[ranking.currentRank || 0];
-        const points = ranking.rankPoints || 0;
-        
-        // 3. Streak (muss aus den Daten des Users berechnet werden)
-        const streak = calculateUserStreak(data.dailyEntries || {});
-        
-        // 4. Gewichtsverlust
-        const startWeight = profile.startWeight || 0;
-        let latestWeight = profile.currentWeight || 0;
-        
-        if (data.weightEntries && data.weightEntries.length > 0) {
-            const sortedWeights = [...data.weightEntries].sort((a, b) => new Date(b.date) - new Date(a.date));
-            latestWeight = sortedWeights[0].weight;
-        }
-        
-        const totalLost = startWeight - latestWeight;
-        const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
-        
-// HTML erstellen (NEUES DESIGN - JETZT KORRIGIERT)
+        
+        const profile = data.profile;
+        const ranking = data.ranking;
+        
+        // 1. Name
+        const name = profile.name || 'Unbekannt';
+        
+        // 2. Rang, Icon, Punkte
+        const rankInfo = RANKS[ranking.currentRank || 0];
+        const points = ranking.rankPoints || 0;
+        
+        // 3. Streak (muss aus den Daten des Users berechnet werden)
+        const streak = calculateUserStreak(data.dailyEntries || {});
+        
+        // 4. Gewichtsverlust
+        const startWeight = profile.startWeight || 0;
+        let latestWeight = profile.currentWeight || 0;
+        
+        if (data.weightEntries && data.weightEntries.length > 0) {
+            const sortedWeights = [...data.weightEntries].sort((a, b) => new Date(b.date) - new Date(a.date));
+            latestWeight = sortedWeights[0].weight;
+        }
+        
+        const totalLost = startWeight - latestWeight;
+        const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
+        
+        // HTML erstellen - Optimiertes Grid-Layout
         const userClass = isCurrentUser ? 'current-user' : '';
-        const entryHTML = `
-            <div class="leaderboard-entry ${userClass}">
-                <span class="leaderboard-pos">${index + 1}.</span>
-                
-                                <div class="leaderboard-user">
-                    <span class="leaderboard-name" title="${name}">${name} ${isCurrentUser ? '(Du)' : ''}</span>
-                    <div class="leaderboard-rank">
-                        <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
-                        <span class="leaderboard-rank-name">${rankInfo.name}</span>
-                    </div>
-                </div>
+        const entryHTML = `
+            <div class="leaderboard-entry ${userClass}">
+                <span class="leaderboard-pos">${index + 1}.</span>
+                
+                <div class="leaderboard-user">
+                    <span class="leaderboard-name" title="${name}">${name}${isCurrentUser ? ' (Du)' : ''}</span>
+                    <div class="leaderboard-rank">
+                        <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
+                        <span class="leaderboard-rank-name">${rankInfo.name}</span>
+                    </div>
+                </div>
 
-                                <div class="leaderboard-points">
-                    <strong>${points}</strong> Pkt.
-                </div>
+                <div class="leaderboard-points">
+                    <strong>${points}</strong> Pkt.
+                </div>
 
-                                <div class="leaderboard-stat streak">
-                    <span>🔥</span> 
-                    <strong>${streak}</strong>
-                </div>
+                <div class="leaderboard-stat streak">
+                    <span>🔥</span> 
+                    <strong>${streak}</strong>
+                </div>
 
-                <div class="leaderboard-stat kg">
-                    <span>📉</span> 
-                    <strong>${totalLostDisplay}</strong> kg
-                </div>
-            </div>
-        `;
-        
-        container.innerHTML += entryHTML;
-    });
+                <div class="leaderboard-stat kg">
+                    <span>📉</span> 
+                    <strong>${totalLostDisplay}</strong> kg
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML += entryHTML;
+    });
 }
 
 // NEU: Aktualisiert die Platzierung auf der Rang-Karte
