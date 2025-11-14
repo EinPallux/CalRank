@@ -40,6 +40,8 @@ let userData = {
 
 // NEU: Hält den Echtzeit-Listener für das Leaderboard
 let leaderboardListener = null;
+// NEU: Hält die vollen Leaderboard-Daten für die UI-Updates
+let fullLeaderboardData = [];
 
 // ==================== INITIALIZATION (NEU: Auth-Gesteuert) ====================
 document.addEventListener('DOMContentLoaded', function() {
@@ -120,7 +122,7 @@ async function loadData(uid) {
                 
                 // Starte Leaderboard-Listener
                 if (!leaderboardListener) {
-                    leaderboardListener = listenForLeaderboard();
+                    leaderboardListener = startLeaderboardListener(); // ANGEPASST
                 }
             } else {
                 // User ist eingeloggt, hat aber Setup nicht beendet
@@ -229,6 +231,10 @@ async function handleLogin() {
 
 async function handleLogout() {
     try {
+        if (leaderboardListener) { // Sicherstellen, dass der Listener gestoppt wird
+            leaderboardListener();
+            leaderboardListener = null;
+        }
         await auth.signOut();
         // Logout erfolgreich. Der onAuthStateChanged-Listener übernimmt den Rest.
         showNotification("Erfolgreich abgemeldet.", "success");
@@ -1274,25 +1280,37 @@ document.addEventListener('keydown', function(e) {
 // ==================== SERVICE WORKER (Unverändert) ====================
 // ...
 
-// ==================== VIEW SWITCHING (Unverändert) ====================
-// ...
+// ==================== VIEW SWITCHING (ANGEPASST) ====================
 function switchView(view) {
     const dashboardView = document.getElementById('dashboardView');
     const rankingView = document.getElementById('rankingView');
+    const leaderboardView = document.getElementById('leaderboardView'); // NEU
+    
     const dashboardTab = document.querySelectorAll('.nav-tab')[0];
     const rankingTab = document.querySelectorAll('.nav-tab')[1];
+    const leaderboardTab = document.querySelectorAll('.nav-tab')[2]; // NEU
+    
+    // Alle Views ausblenden
+    dashboardView.classList.add('hidden');
+    rankingView.classList.add('hidden');
+    leaderboardView.classList.add('hidden'); // NEU
+    
+    // Alle Tabs deaktivieren
+    dashboardTab.classList.remove('active');
+    rankingTab.classList.remove('active');
+    leaderboardTab.classList.remove('active'); // NEU
     
     if (view === 'dashboard') {
         dashboardView.classList.remove('hidden');
-        rankingView.classList.add('hidden');
         dashboardTab.classList.add('active');
-        rankingTab.classList.remove('active');
     } else if (view === 'ranking') {
-        dashboardView.classList.add('hidden');
         rankingView.classList.remove('hidden');
-        dashboardTab.classList.remove('active');
         rankingTab.classList.add('active');
         loadRankingContent();
+    } else if (view === 'leaderboard') { // NEU
+        leaderboardView.classList.remove('hidden');
+        leaderboardTab.classList.add('active');
+        loadLeaderboardPage(); // Lädt die UI mit den bereits vorhandenen Daten
     }
 }
 
@@ -2074,30 +2092,55 @@ function displayRankHistory() {
 
 // ==================== LEADERBOARD (NEU) ====================
 
-function listenForLeaderboard() {
-    console.log("Leaderboard-Listener wird gestartet...");
-    const container = document.getElementById('leaderboardList');
+// NEU: Wird aufgerufen, wenn man auf den Leaderboard-Tab klickt
+function loadLeaderboardPage() {
+    // Aktualisiert die UI mit den Daten, die der Listener bereits geladen hat
+    if (fullLeaderboardData.length > 0) {
+        updateLeaderboardPage(fullLeaderboardData);
+    }
+    // Das Badge für "Zuletzt aktualisiert" wird ebenfalls in updateLeaderboardPage gesetzt
+}
 
-    // Erstelle eine Abfrage: 'users'-Collection, sortiert nach 'ranking.rankPoints' absteigend, limitiert auf 5
+function startLeaderboardListener() {
+    console.log("Leaderboard-Listener wird gestartet...");
+    const container = document.getElementById('fullLeaderboardList'); // Container auf der neuen Seite
+
+    // Erstelle eine Abfrage: Top 50, sortiert nach Punkten
     const query = db.collection('users')
                     .orderBy('ranking.rankPoints', 'desc')
-                    .limit(5);
+                    .limit(50); // Lade Top 50 für eine genaue Platzierung
     
     // .onSnapshot erstellt einen Echtzeit-Listener
     const unsubscribe = query.onSnapshot(snapshot => {
         console.log("Leaderboard-Daten empfangen:", snapshot.docs.length, "Einträge");
-        const users = snapshot.docs;
-        updateLeaderboardUI(users);
+        const docs = snapshot.docs;
+        
+        fullLeaderboardData = docs; // Speichere die Daten global
+        
+        // Aktualisiere beide Bereiche: Die Seite und die Rang-Karte
+        updateLeaderboardPage(docs);
+        updateRankPlacement(docs);
+
     }, error => {
         console.error("Fehler beim Abrufen des Leaderboards:", error);
         container.innerHTML = '<p class="leaderboard-placeholder">Leaderboard konnte nicht geladen werden.</p>';
+        document.getElementById('rankPlacement').textContent = 'Fehler';
     });
 
     return unsubscribe; // Gibt die Funktion zurück, um den Listener zu stoppen (beim Logout)
 }
 
-function updateLeaderboardUI(docs) {
-    const container = document.getElementById('leaderboardList');
+// NEU: Aktualisiert die UI der neuen Leaderboard-Seite
+function updateLeaderboardPage(docs) {
+    const container = document.getElementById('fullLeaderboardList');
+    const currentUserId = auth.currentUser ? auth.currentUser.uid : null;
+    
+    // Update "Zuletzt aktualisiert" Badge
+    const timestampEl = document.getElementById('leaderboardLastUpdated');
+    if (timestampEl) {
+        timestampEl.textContent = `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
+    }
+
     if (!docs || docs.length === 0) {
         container.innerHTML = '<p class="leaderboard-placeholder">Noch keine Einträge im Leaderboard.</p>';
         return;
@@ -2107,6 +2150,8 @@ function updateLeaderboardUI(docs) {
     
     docs.forEach((doc, index) => {
         const data = doc.data();
+        const isCurrentUser = doc.id === currentUserId;
+        
         const profile = data.profile;
         const ranking = data.ranking;
         
@@ -2133,10 +2178,11 @@ function updateLeaderboardUI(docs) {
         const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
         
         // HTML erstellen
+        const userClass = isCurrentUser ? 'current-user' : '';
         const entryHTML = `
-            <div class="leaderboard-entry">
+            <div class="leaderboard-entry ${userClass}">
                 <span class="leaderboard-pos">${index + 1}.</span>
-                <span class="leaderboard-name" title="${name}">${name}</span>
+                <span class="leaderboard-name" title="${name}">${name} ${isCurrentUser ? '(Du)' : ''}</span>
                 <div class="leaderboard-rank">
                     <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
                     <span>${points}</span>
@@ -2149,6 +2195,23 @@ function updateLeaderboardUI(docs) {
         container.innerHTML += entryHTML;
     });
 }
+
+// NEU: Aktualisiert die Platzierung auf der Rang-Karte
+function updateRankPlacement(docs) {
+    const currentUserId = auth.currentUser ? auth.currentUser.uid : null;
+    const placementEl = document.getElementById('rankPlacement');
+    if (!currentUserId || !placementEl) return;
+
+    const userIndex = docs.findIndex(doc => doc.id === currentUserId);
+
+    if (userIndex !== -1) {
+        const rank = userIndex + 1;
+        placementEl.textContent = `Platz ${rank} von ${docs.length}`;
+    } else {
+        placementEl.textContent = 'Nicht in Top 50';
+    }
+}
+
 
 // Helferfunktion, um Streak für *andere* User im Leaderboard zu berechnen
 function calculateUserStreak(dailyEntries) {

@@ -8,11 +8,46 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
+        /* NEU: Für die Platzierung auf der Rank-Card */
+        .rank-placement-badge {
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--primary-light);
+            margin-left: 0.75rem;
+            vertical-align: middle;
+        }
+
+        /* NEU: Container für die Leaderboard-Seite */
+        .leaderboard-page-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .leaderboard-hero {
+            text-align: center;
+            padding: 2rem 0;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-radius: 16px;
+            margin-bottom: 2rem;
+        }
+
+        .leaderboard-hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .leaderboard-hero p {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+        }
+
         .leaderboard-list {
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
-            /* Höhe wird durch bento-item gesteuert */
         }
         .leaderboard-entry {
             display: grid;
@@ -26,6 +61,11 @@
             font-size: 0.875rem;
             border: 1px solid var(--border-color);
         }
+        .leaderboard-entry.current-user { /* NEU: Stil für aktuellen User */
+            border-color: var(--primary-color);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
         .leaderboard-entry:nth-child(1) .leaderboard-pos { color: #f59e0b; /* Gold */ }
         .leaderboard-entry:nth-child(2) .leaderboard-pos { color: #c0c0c0; /* Silber */ }
         .leaderboard-entry:nth-child(3) .leaderboard-pos { color: #cd7f32; /* Bronze */ }
@@ -463,6 +503,7 @@ const firebaseConfig = {
                 <nav class="nav-tabs">
                     <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
                     <button class="nav-tab" onclick="switchView('ranking')">Ranking System</button>
+                    <button class="nav-tab" onclick="switchView('leaderboard')">Leaderboard</button>
                 </nav>
                 <div class="header-actions">
                     <span class="welcome-text">Hallo, <span id="userName">-</span>!</span>
@@ -480,6 +521,7 @@ const firebaseConfig = {
                         <div class="rank-header">
                             <div>
                                 <h2>Dein Rang</h2>
+                                <span class="rank-placement-badge" id="rankPlacement">...</span>
                                 <p class="rank-subtitle">Zeig was du kannst!</p>
                             </div>
                             <button class="btn-icon-small" onclick="viewRankHistory()" title="Rank Historie">📊</button>
@@ -702,17 +744,8 @@ const firebaseConfig = {
                 </div>
             </div>
 
-            <div class="card leaderboard-card">
-                <div class="card-header">
-                    <h2>🏆 Leaderboard (Top 5)</h2>
-                    <span class="date-badge">Freunde</span>
-                </div>
-                <div class="leaderboard-list" id="leaderboardList">
-                    <div class="leaderboard-placeholder">
-                        <p>Leaderboard wird geladen...</p>
-                    </div>
-                </div>
-            </div>
+            <!-- LEADERBOARD-KARTE WURDE VON HIER ENTFERNT -->
+
             </div>
         </div>
         <div id="rankingView" class="view-content hidden">
@@ -721,7 +754,32 @@ const firebaseConfig = {
                     </div>
             </div>
         </div>
+        
+        <!-- NEUE LEADERBOARD-SEITE -->
+        <div id="leaderboardView" class="view-content hidden">
+            <div class="main-content leaderboard-page-content">
+                <div class="leaderboard-hero">
+                    <h1>🏆 Leaderboard</h1>
+                    <p>Messe dich mit anderen und sieh deine Platzierung!</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Globale Rangliste</h2>
+                        <span class="date-badge" id="leaderboardLastUpdated">...</span>
+                    </div>
+                    <div class="leaderboard-list" id="fullLeaderboardList">
+                        <div class="leaderboard-placeholder">
+                            <p>Leaderboard wird geladen...</p>
+                        </div>
+                        <!-- Einträge werden hier von app.js eingefügt -->
+                    </div>
+                </div>
+            </div>
         </div>
+        <!-- ENDE NEUE LEADERBOARD-SEITE -->
+        
+    </div>
 
     <div id="addCaloriesModal" class="modal">
         <div class="modal-content">
