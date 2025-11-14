@@ -444,6 +444,7 @@ function initDashboard() {
     calculateRankForPastDays(); // Wichtig: Diese Funktion ruft am Ende saveData() auf!
 
     setInterval(updateDashboard, 60000); // Update every minute
+            updateHeaderMotivation();
 }
 
 function updateDashboard() {
@@ -1146,7 +1147,6 @@ async function handleProfileUpdate() {
         // Dashboard neu laden
         showDashboard();
         initDashboard();
-        updateHeaderMotivation();
 
     } catch (error) {
         console.error("Fehler beim Profil-Update:", error);
