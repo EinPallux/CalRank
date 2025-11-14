@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CalRank - Dein Abnehm Tracker mit Ranking</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Setup Screen -->
+    <div id="setupScreen" class="setup-screen">
+        <div class="setup-container">
+            <div class="setup-header">
+                <h1>🎯 Willkommen bei CalRank</h1>
+                <p>Dein intelligenter Abnehm-Tracker mit Ranking-System</p>
+            </div>
+
+            <div class="setup-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="setupProgress"></div>
+                </div>
+                <span class="progress-text">Schritt <span id="currentStep">1</span> von 7</span>
+            </div>
+
+            <!-- Step 1: Persönliche Daten -->
+            <div class="setup-step active" id="step1">
+                <h2>Persönliche Daten</h2>
+                <div class="form-group">
+                    <label for="name">Dein Name</label>
+                    <input type="text" id="name" placeholder="z.B. Max">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="age">Alter</label>
+                        <input type="number" id="age" placeholder="z.B. 25" min="10" max="120">
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Geschlecht</label>
+                        <select id="gender">
+                            <option value="male">Männlich</option>
+                            <option value="female">Weiblich</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+            </div>
+
+            <!-- Step 2: Körperdaten -->
+            <div class="setup-step" id="step2">
+                <h2>Körperdaten</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="height">Größe (cm)</label>
+                        <input type="number" id="height" placeholder="z.B. 180" min="100" max="250">
+                    </div>
+                    <div class="form-group">
+                        <label for="currentWeight">Aktuelles Gewicht (kg)</label>
+                        <input type="number" id="currentWeight" step="0.1" placeholder="z.B. 85.5" min="30" max="300">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="targetWeight">Zielgewicht (kg)</label>
+                    <input type="number" id="targetWeight" step="0.1" placeholder="z.B. 75.0" min="30" max="300">
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Aktivitätslevel -->
+            <div class="setup-step" id="step3">
+                <h2>Aktivitätslevel</h2>
+                <p class="step-description">Wie aktiv bist du im Alltag?</p>
+                <div class="activity-options">
+                    <label class="activity-card">
+                        <input type="radio" name="activity" value="1.2">
+                        <div class="card-content">
+                            <span class="activity-icon">🛋️</span>
+                            <h3>Sitzend</h3>
+                            <p>Wenig bis keine Bewegung</p>
+                        </div>
+                    </label>
+                    <label class="activity-card">
+                        <input type="radio" name="activity" value="1.375">
+                        <div class="card-content">
+                            <span class="activity-icon">🚶</span>
+                            <h3>Leicht aktiv</h3>
+                            <p>1-3 Tage/Woche Sport</p>
+                        </div>
+                    </label>
+                    <label class="activity-card">
+                        <input type="radio" name="activity" value="1.55" checked>
+                        <div class="card-content">
+                            <span class="activity-icon">🏃</span>
+                            <h3>Mäßig aktiv</h3>
+                            <p>3-5 Tage/Woche Sport</p>
+                        </div>
+                    </label>
+                    <label class="activity-card">
+                        <input type="radio" name="activity" value="1.725">
+                        <div class="card-content">
+                            <span class="activity-icon">💪</span>
+                            <h3>Sehr aktiv</h3>
+                            <p>6-7 Tage/Woche Sport</p>
+                        </div>
+                    </label>
+                    <label class="activity-card">
+                        <input type="radio" name="activity" value="1.9">
+                        <div class="card-content">
+                            <span class="activity-icon">🏋️</span>
+                            <h3>Extrem aktiv</h3>
+                            <p>Körperliche Arbeit + Training</p>
+                        </div>
+                    </label>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Abnehmziel -->
+            <div class="setup-step" id="step4">
+                <h2>Dein Abnehmziel</h2>
+                <p class="step-description">Wie schnell möchtest du abnehmen?</p>
+                <div class="goal-options">
+                    <label class="goal-card">
+                        <input type="radio" name="deficit" value="250">
+                        <div class="card-content">
+                            <h3>Langsam</h3>
+                            <p>0.25 kg/Woche</p>
+                            <span class="deficit">-250 kcal/Tag</span>
+                        </div>
+                    </label>
+                    <label class="goal-card">
+                        <input type="radio" name="deficit" value="500" checked>
+                        <div class="card-content">
+                            <h3>Moderat</h3>
+                            <p>0.5 kg/Woche</p>
+                            <span class="deficit">-500 kcal/Tag</span>
+                        </div>
+                    </label>
+                    <label class="goal-card">
+                        <input type="radio" name="deficit" value="750">
+                        <div class="card-content">
+                            <h3>Schnell</h3>
+                            <p>0.75 kg/Woche</p>
+                            <span class="deficit">-750 kcal/Tag</span>
+                        </div>
+                    </label>
+                </div>
+                <div class="info-box">
+                    <span class="info-icon">💡</span>
+                    <p>Ein moderates Tempo von 0.5 kg/Woche ist nachhaltig und gesund empfohlen.</p>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+                </div>
+            </div>
+
+            <!-- Step 5: Ranking-System -->
+            <div class="setup-step" id="step5">
+                <h2>🏆 Ranking-System</h2>
+                <p class="step-description">Sammle Punkte und steige in den Rängen auf!</p>
+                
+                <div class="ranks-preview">
+                    <div class="rank-preview-item">
+                        <span class="rank-emoji">🔨</span>
+                        <div>
+                            <strong>Iron</strong>
+                            <span>Start (0 Punkte)</span>
+                        </div>
+                    </div>
+                    <div class="rank-arrow">→</div>
+                    <div class="rank-preview-item">
+                        <span class="rank-emoji">⭐</span>
+                        <div>
+                            <strong>Gold</strong>
+                            <span>200 Punkte</span>
+                        </div>
+                    </div>
+                    <div class="rank-arrow">→</div>
+                    <div class="rank-preview-item">
+                        <span class="rank-emoji">💎</span>
+                        <div>
+                            <strong>Diamond</strong>
+                            <span>500 Punkte</span>
+                        </div>
+                    </div>
+                    <div class="rank-arrow">→</div>
+                    <div class="rank-preview-item">
+                        <span class="rank-emoji">🔥</span>
+                        <div>
+                            <strong>Infernal</strong>
+                            <span>3.500 Punkte</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="points-info">
+                    <div class="points-section positive">
+                        <h4>✅ Punkte sammeln durch:</h4>
+                        <ul>
+                            <li><strong>Gewichtsverlust</strong> - 150 Punkte pro kg (WICHTIGSTE!)</li>
+                            <li><strong>Gewicht eintragen</strong> - 30 Punkte/Tag</li>
+                            <li><strong>Kalorienziel erreichen</strong> - 40 Punkte</li>
+                            <li><strong>Proteinziel erfüllen</strong> - 35 Punkte</li>
+                            <li><strong>10.000 Schritte</strong> - 25 Punkte</li>
+                            <li><strong>3 Hauptmahlzeiten</strong> - 20 Punkte</li>
+                        </ul>
+                    </div>
+                    <div class="points-section negative">
+                        <h4>⚠️ Punkte verlieren durch:</h4>
+                        <ul>
+                            <li><strong>Kalorienüberschreitung</strong> - Bis zu -50 Punkte</li>
+                            <li><strong>Zu wenig Protein</strong> - -15 Punkte</li>
+                            <li><strong>Unter 1.000 Schritte</strong> - -10 Punkte</li>
+                            <li><strong>Kein Tracking</strong> - -20 Punkte</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="info-box" style="background: rgba(147, 51, 234, 0.1); border-left-color: #9333ea; margin-top: 1.5rem;">
+                    <span class="info-icon">⏰</span>
+                    <p style="margin: 0;">Dein Rang wird <strong>jeden Tag um Mitternacht</strong> automatisch berechnet!</p>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Verstanden!</button>
+                </div>
+            </div>
+
+            <!-- Step 6: Motivation/Reason -->
+            <div class="setup-step" id="step6">
+                <h2>💪 Deine Motivation</h2>
+                <p class="step-description">Warum möchtest du abnehmen? Dieser Grund wird dich durch schwierige Zeiten begleiten!</p>
+                
+                <div class="form-group">
+                    <label for="motivationReason">Mein Grund</label>
+                    <textarea 
+                        id="motivationReason" 
+                        rows="5" 
+                        placeholder="z.B. Ich möchte mich in meinem Körper wieder wohlfühlen und mehr Energie haben..."
+                        style="resize: vertical; font-family: inherit; padding: 1rem; border: 2px solid var(--border-color); border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); width: 100%; font-size: 1rem;"
+                    ></textarea>
+                </div>
+
+                <div class="motivation-examples">
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Beispiele:</p>
+                    <div class="example-chips">
+                        <span class="example-chip" onclick="setMotivation('Ich möchte mich wieder wohlfühlen')">Wohlfühlen</span>
+                        <span class="example-chip" onclick="setMotivation('Mehr Energie im Alltag')">Mehr Energie</span>
+                        <span class="example-chip" onclick="setMotivation('Gesünder leben')">Gesund leben</span>
+                        <span class="example-chip" onclick="setMotivation('Selbstbewusster werden')">Selbstbewusstsein</span>
+                    </div>
+                </div>
+
+                <div class="info-box" style="background: rgba(16, 185, 129, 0.1); border-left-color: #10b981; margin-top: 1.5rem;">
+                    <span class="info-icon">💡</span>
+                    <p style="margin: 0;">Dein Grund wird im Dashboard angezeigt und dich täglich motivieren!</p>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Weiter</button>
+                </div>
+            </div>
+
+            <!-- Step 7: Zusammenfassung -->
+            <div class="setup-step" id="step7">
+                <h2>Zusammenfassung</h2>
+                <div class="summary-card">
+                    <div class="summary-item">
+                        <span class="summary-label">BMI</span>
+                        <span class="summary-value" id="summaryBMI">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Grundumsatz</span>
+                        <span class="summary-value" id="summaryBMR">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Gesamtumsatz</span>
+                        <span class="summary-value" id="summaryTDEE">-</span>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span class="summary-label">Tägliches Kalorienziel</span>
+                        <span class="summary-value" id="summaryTarget">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Zu verlieren</span>
+                        <span class="summary-value" id="summaryToLose">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Empfohlene Protein/Tag</span>
+                        <span class="summary-value" id="summaryProtein">-</span>
+                    </div>
+                </div>
+                <div class="info-box" style="background: rgba(147, 51, 234, 0.1); border-left-color: #9333ea;">
+                    <span class="info-icon">🏆</span>
+                    <div>
+                        <p style="margin: 0; font-weight: 600; color: var(--text-primary);">Ranking-System</p>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;">Dein Rang wird am Ende jedes Tages basierend auf deiner Performance berechnet. Erreiche deine Ziele, tracke konsequent und verliere Gewicht, um Punkte zu sammeln und aufzusteigen!</p>
+                    </div>
+                </div>
+                <div class="success-message">
+                    <span class="success-icon">🎉</span>
+                    <p>Perfekt! Dein Profil ist bereit. Lass uns starten!</p>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">Zurück</button>
+                    <button class="btn btn-primary btn-large" onclick="completeSetup()">Los geht's!</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="dashboard hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>🎯 CalRank</h1>
+                </div>
+                <nav class="nav-tabs">
+                    <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
+                    <button class="nav-tab" onclick="switchView('ranking')">Ranking System</button>
+                </nav>
+                <div class="header-actions">
+                    <span class="welcome-text">Hallo, <span id="userName">-</span>!</span>
+                    <button class="btn-icon" onclick="openSettings()" title="Einstellungen">⚙️</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard View -->
+        <div id="dashboardView" class="view-content">
+            <div class="main-content">
+            <!-- Bento Grid Layout -->
+            <div class="bento-grid">
+                <!-- Rank Card (Large) -->
+                <div class="bento-item rank-item" id="rankCard">
+                    <div class="rank-card-content">
+                        <div class="rank-header">
+                            <div>
+                                <h2>Dein Rang</h2>
+                                <p class="rank-subtitle">Zeig was du kannst!</p>
+                            </div>
+                            <button class="btn-icon-small" onclick="viewRankHistory()" title="Rank Historie">📊</button>
+                        </div>
+                        <div class="rank-display">
+                            <img id="rankIcon" src="ranks/1iron.png" alt="Rank Icon" class="rank-icon">
+                            <div class="rank-info">
+                                <div class="rank-name-display">
+                                    <span id="rankName" class="rank-name">Iron</span>
+                                </div>
+                                <div class="rank-points-display">
+                                    <span id="rankPoints" class="rank-points">0</span> Punkte
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rank-progress-container">
+                            <div class="rank-progress-bar">
+                                <div class="rank-progress-fill" id="rankProgress"></div>
+                            </div>
+                            <div class="rank-progress-text">
+                                <span>Nächster Rang: <strong id="nextRankName">Gold</strong></span>
+                                <span><strong id="pointsToNext">200</strong> Punkte</span>
+                            </div>
+                        </div>
+                        <div class="rank-tip">
+                            💡 Rang wird am Ende jedes Tages aktualisiert
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today Stats (Medium) -->
+                <div class="bento-item stats-item">
+                    <div class="bento-header">
+                        <h3>Heute</h3>
+                        <span class="date-badge" id="todayDate"></span>
+                    </div>
+                    <div class="stats-grid-compact">
+                        <div class="stat-compact">
+                            <span class="stat-icon-small">🍽️</span>
+                            <div>
+                                <div class="stat-label-small">Kalorien</div>
+                                <div class="stat-value-small"><span id="caloriesConsumed">0</span>/<span id="caloriesTarget">0</span></div>
+                            </div>
+                        </div>
+                        <div class="stat-compact">
+                            <span class="stat-icon-small">💪</span>
+                            <div>
+                                <div class="stat-label-small">Protein</div>
+                                <div class="stat-value-small"><span id="proteinConsumed">0</span>/<span id="proteinTarget">0</span>g</div>
+                            </div>
+                        </div>
+                        <div class="stat-compact">
+                            <span class="stat-icon-small">👟</span>
+                            <div>
+                                <div class="stat-label-small">Schritte</div>
+                                <div class="stat-value-small"><span id="stepsToday">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weight Info (Small) -->
+                <div class="bento-item weight-item">
+                    <h3>⚖️ Gewicht</h3>
+                    <div class="weight-display">
+                        <div class="weight-current"><span id="currentWeightDisplay">-</span> kg</div>
+                        <div class="weight-remaining">Noch <span id="remainingWeight">-</span> kg</div>
+                    </div>
+                </div>
+
+                <!-- Streak (Small) -->
+                <div class="bento-item streak-item">
+                    <h3>🔥 Streak</h3>
+                    <div class="streak-display" id="streakBadge">0 Tage</div>
+                </div>
+
+                <!-- Status Message (Wide) -->
+                <div class="bento-item status-item">
+                    <div class="status-message-bento" id="statusMessage"></div>
+                </div>
+
+                <!-- Quick Actions (Wide) -->
+                <div class="bento-item actions-item">
+                    <div class="quick-actions-bento">
+                        <button class="action-btn-bento" onclick="openModal('addCalories')">
+                            <span class="action-icon-bento">🍽️</span>
+                            <span>Kalorien</span>
+                        </button>
+                        <button class="action-btn-bento" onclick="openModal('addWeight')">
+                            <span class="action-icon-bento">⚖️</span>
+                            <span>Gewicht</span>
+                        </button>
+                        <button class="action-btn-bento" onclick="openModal('addSteps')">
+                            <span class="action-icon-bento">👟</span>
+                            <span>Schritte</span>
+                        </button>
+                        <button class="action-btn-bento" onclick="openModal('viewHistory')">
+                            <span class="action-icon-bento">📊</span>
+                            <span>Verlauf</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supplement Reminder (if enabled) -->
+            <div class="card supplement-reminder hidden" id="supplementReminder">
+                <div class="reminder-content">
+                    <span class="reminder-icon">💊</span>
+                    <div class="reminder-text">
+                        <h3>Supplement-Erinnerung</h3>
+                        <p>Hast du heute schon deine Supplements genommen?</p>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="markSupplementsTaken()">Erledigt ✓</button>
+                </div>
+            </div>
+
+            <!-- Today's Meals Overview -->
+            <div class="card meals-overview-card">
+                <div class="card-header">
+                    <h2>Heutige Mahlzeiten</h2>
+                    <button class="btn-small" onclick="openModal('addCalories')">+ Hinzufügen</button>
+                </div>
+                <div class="meals-by-category" id="mealsOverview">
+                    <div class="meal-category">
+                        <div class="category-header">
+                            <span class="category-icon">🌅</span>
+                            <h3>Frühstück</h3>
+                            <span class="category-total" id="breakfastTotal">0 kcal</span>
+                        </div>
+                        <div class="category-items" id="breakfastItems">
+                            <p class="empty-message">Noch keine Einträge</p>
+                        </div>
+                    </div>
+                    <div class="meal-category">
+                        <div class="category-header">
+                            <span class="category-icon">☀️</span>
+                            <h3>Mittagessen</h3>
+                            <span class="category-total" id="lunchTotal">0 kcal</span>
+                        </div>
+                        <div class="category-items" id="lunchItems">
+                            <p class="empty-message">Noch keine Einträge</p>
+                        </div>
+                    </div>
+                    <div class="meal-category">
+                        <div class="category-header">
+                            <span class="category-icon">🌙</span>
+                            <h3>Abendessen</h3>
+                            <span class="category-total" id="dinnerTotal">0 kcal</span>
+                        </div>
+                        <div class="category-items" id="dinnerItems">
+                            <p class="empty-message">Noch keine Einträge</p>
+                        </div>
+                    </div>
+                    <div class="meal-category">
+                        <div class="category-header">
+                            <span class="category-icon">🍪</span>
+                            <h3>Snacks</h3>
+                            <span class="category-total" id="snackTotal">0 kcal</span>
+                        </div>
+                        <div class="category-items" id="snackItems">
+                            <p class="empty-message">Noch keine Einträge</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weight Chart -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Gewichtsverlauf</h2>
+                    <div class="chart-controls">
+                        <button class="btn-small" onclick="changeChartPeriod('week')">7T</button>
+                        <button class="btn-small active" onclick="changeChartPeriod('month')">30T</button>
+                        <button class="btn-small" onclick="changeChartPeriod('all')">Alle</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="weightChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Statistics Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-icon">📅</span>
+                        <h3>Wochenstatistik</h3>
+                    </div>
+                    <div class="stat-card-body">
+                        <div class="stat-row">
+                            <span>Durchschn. Kalorien</span>
+                            <strong id="weekAvgCalories">-</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Gewichtsänderung</span>
+                            <strong id="weekWeightChange">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-icon">🎯</span>
+                        <h3>Fortschritt</h3>
+                    </div>
+                    <div class="stat-card-body">
+                        <div class="stat-row">
+                            <span>Verloren</span>
+                            <strong id="totalWeightLost">-</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Fortschritt</span>
+                            <strong id="progressPercentage">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-icon">⏱️</span>
+                        <h3>Prognose</h3>
+                    </div>
+                    <div class="stat-card-body">
+                        <div class="stat-row">
+                            <span>Ziel erreicht am</span>
+                            <strong id="estimatedDate">-</strong>
+                        </div>
+                        <div class="stat-row">
+                            <span>Noch</span>
+                            <strong id="daysRemaining">-</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+        <!-- End Dashboard View -->
+
+        <!-- Ranking System View -->
+        <div id="rankingView" class="view-content hidden">
+            <div class="main-content">
+                <div class="ranking-explanation" id="rankingContent">
+                    <!-- Content wird dynamisch von loadRankingContent() geladen -->
+                </div>
+            </div>
+        </div>
+        <!-- End Ranking View -->
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Calories Modal -->
+    <div id="addCaloriesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Kalorien & Makros hinzufügen</h2>
+                <button class="close-btn" onclick="closeModal('addCalories')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="mealCategory">Mahlzeit</label>
+                    <select id="mealCategory">
+                        <option value="breakfast">🌅 Frühstück</option>
+                        <option value="lunch">☀️ Mittagessen</option>
+                        <option value="dinner">🌙 Abendessen</option>
+                        <option value="snack">🍪 Snack</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mealName">Lebensmittel</label>
+                    <input type="text" id="mealName" placeholder="z.B. Hähnchenbrust, Reis, Apfel...">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="mealCalories">Kalorien</label>
+                        <input type="number" id="mealCalories" placeholder="kcal" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="mealProtein">Protein (optional)</label>
+                        <input type="number" id="mealProtein" placeholder="g" min="0">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addMeal()">Hinzufügen</button>
+            </div>
+            <div class="modal-footer">
+                <h3>Heutige Einträge</h3>
+                <div id="todayMeals" class="meals-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Weight Modal -->
+    <div id="addWeightModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Gewicht eintragen</h2>
+                <button class="close-btn" onclick="closeModal('addWeight')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="weightDate">Datum</label>
+                    <input type="date" id="weightDate">
+                </div>
+                <div class="form-group">
+                    <label for="weightValue">Gewicht (kg)</label>
+                    <input type="number" id="weightValue" step="0.1" placeholder="z.B. 85.5">
+                </div>
+                <button class="btn btn-primary" onclick="addWeight()">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Steps Modal -->
+    <div id="addStepsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Schritte eintragen</h2>
+                <button class="close-btn" onclick="closeModal('addSteps')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="stepsValue">Anzahl Schritte</label>
+                    <input type="number" id="stepsValue" placeholder="z.B. 10000" min="0">
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
+                        💡 Durchschnittlich verbrennt man ca. 0.04 kcal pro Schritt (abhängig von Gewicht und Geschwindigkeit)
+                    </p>
+                </div>
+                <div class="info-box" style="margin-top: 1rem;">
+                    <span class="info-icon">📊</span>
+                    <div>
+                        <p style="margin: 0; font-weight: 600;">Voraussichtlich verbrannt:</p>
+                        <p style="margin: 0.25rem 0 0 0; font-size: 1.25rem; color: var(--primary-color);" id="estimatedStepsCalories">0 kcal</p>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addSteps()">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="viewHistoryModal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>Verlauf</h2>
+                <button class="close-btn" onclick="closeModal('viewHistory')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="history-tabs">
+                    <button class="tab-btn active" onclick="switchHistoryTab('calories')">Kalorien</button>
+                    <button class="tab-btn" onclick="switchHistoryTab('weight')">Gewicht</button>
+                </div>
+                <div id="caloriesHistory" class="history-content"></div>
+                <div id="weightHistory" class="history-content hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Einstellungen</h2>
+                <button class="close-btn" onclick="closeModal('settings')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Profil</h3>
+                    <button class="btn btn-secondary" onclick="editProfile()">Profil bearbeiten</button>
+                    <button class="btn btn-danger" onclick="resetApp()">Alle Daten löschen</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Erinnerungen</h3>
+                    <div class="setting-toggle">
+                        <div class="toggle-info">
+                            <strong>Supplement-Erinnerung</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                                Tägliche Erinnerung zur Einnahme von Supplements
+                            </p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="supplementReminderToggle" onchange="toggleSupplementReminder()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Export/Import</h3>
+                    <button class="btn btn-secondary" onclick="exportData()">Daten exportieren</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Daten importieren</button>
+                    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rank History Modal -->
+    <div id="rankHistoryModal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>🏆 Rank Historie</h2>
+                <button class="close-btn" onclick="closeModal('rankHistory')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="rank-stats-summary">
+                    <div class="rank-stat-box">
+                        <div class="rank-stat-label">Gesamt Punkte</div>
+                        <div class="rank-stat-value" id="totalRankPoints">0</div>
+                    </div>
+                    <div class="rank-stat-box">
+                        <div class="rank-stat-label">Verdient</div>
+                        <div class="rank-stat-value positive">+<span id="totalEarnedPoints">0</span></div>
+                    </div>
+                    <div class="rank-stat-box">
+                        <div class="rank-stat-label">Verloren</div>
+                        <div class="rank-stat-value negative">-<span id="totalLostPoints">0</span></div>
+                    </div>
+                </div>
+                <div id="rankHistoryContent" class="rank-history-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
