@@ -533,6 +533,22 @@ function updateProgressBar(elementId, current, target) {
     }
 }
 
+function updateHeaderMotivation() {
+    const motivationBadge = document.getElementById('headerMotivationBadge');
+    const motivationText = document.getElementById('headerMotivationText');
+    
+    if (!motivationBadge || !motivationText) return;
+    
+    const motivation = userData.profile.motivationReason;
+    
+    if (motivation && motivation.trim() !== '') {
+        motivationText.textContent = motivation;
+        motivationBadge.style.display = 'flex';
+    } else {
+        motivationBadge.style.display = 'none';
+    }
+}
+
 function updateStatusMessage(todayData) {
     const p = userData.profile;
     const remaining = p.targetCalories - todayData.calories;
@@ -541,12 +557,9 @@ function updateStatusMessage(todayData) {
     let message = '';
     let emoji = '';
     
-    // Add motivation reminder sometimes
-    const showMotivation = Math.random() > 0.7 && p.motivationReason;
-    
     if (todayData.calories === 0) {
         emoji = '🌅';
-        message = `Guten Morgen, ${p.name}! Heute hast du noch <strong>${p.targetCalories} kcal</strong> zur Verfügung. Starte deinen Tag mit einem proteinreichen Frühstück!`;
+        message = `Hey, ${p.name}! Heute hast du noch <strong>${p.targetCalories} kcal</strong> zur Verfügung. Starte deinen Tag mit einem proteinreichen Frühstück!`;
     } else if (remaining > 500) {
         emoji = '💪';
         message = `Super! Du hast noch <strong>${remaining} kcal</strong> übrig. `;
@@ -567,16 +580,6 @@ function updateStatusMessage(todayData) {
         emoji = '⚠️';
         const over = Math.abs(remaining);
         message = `Du hast dein Tagesziel um <strong>${over} kcal</strong> überschritten. Kein Problem! Morgen ist ein neuer Tag. Bleib dran!`;
-    }
-    
-    // Add motivation reminder
-    if (showMotivation) {
-        message += `<br><br><em style="color: var(--primary-color); font-style: italic;">💭 Denk daran: ${p.motivationReason}</em>`;
-    }
-    
-    const statusElement = document.getElementById('statusMessage');
-    if (statusElement) {
-        statusElement.innerHTML = `<span style="font-size: 1.25rem; margin-right: 0.5rem;">${emoji}</span> ${message}`;
     }
 }
 
@@ -1143,6 +1146,7 @@ async function handleProfileUpdate() {
         // Dashboard neu laden
         showDashboard();
         initDashboard();
+        updateHeaderMotivation();
 
     } catch (error) {
         console.error("Fehler beim Profil-Update:", error);

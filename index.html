@@ -376,22 +376,30 @@ const firebaseConfig = {
 
     <div id="dashboard" class="dashboard hidden">
         <header class="header">
-            <div class="header-content">
-                <div class="logo">
-                    <h1>🎯 CalRank</h1>
-                </div>
-                <nav class="nav-tabs">
-                    <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
-                    <button class="nav-tab" onclick="switchView('ranking')">Ranking System</button>
-                    <button class="nav-tab" onclick="switchView('leaderboard')">Leaderboard</button>
-                </nav>
-                <div class="header-actions">
-                    <span class="welcome-text">Hallo, <span id="userName">-</span>!</span>
-                    <button class="btn-icon" onclick="handleLogout()" title="Abmelden">🚪</button>
-                    <button class="btn-icon" onclick="openSettings()" title="Einstellungen">⚙️</button>
-                </div>
-            </div>
-        </header>
+    <div class="header-content">
+        <div class="logo">
+            <h1>🎯 CalRank</h1>
+        </div>
+        
+        <!-- NEU: Motivations-Badge -->
+        <div class="motivation-badge" id="headerMotivationBadge" style="display: none;" title="Dein persönlicher Grund">
+            <span class="motivation-icon">💭</span>
+            <span class="motivation-text" id="headerMotivationText"></span>
+        </div>
+        
+        <nav class="nav-tabs">
+            <button class="nav-tab active" onclick="switchView('dashboard')">Dashboard</button>
+            <button class="nav-tab" onclick="switchView('ranking')">Ranking System</button>
+            <button class="nav-tab" onclick="switchView('leaderboard')">Leaderboard</button>
+        </nav>
+        
+        <div class="header-actions">
+            <span class="welcome-text">Hallo, <span id="userName">-</span>!</span>
+            <button class="btn-icon" onclick="handleLogout()" title="Abmelden">🚪</button>
+            <button class="btn-icon" onclick="openSettings()" title="Einstellungen">⚙️</button>
+        </div>
+    </div>
+</header>
 
         <div id="dashboardView" class="view-content">
             <div class="main-content">
