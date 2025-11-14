@@ -17,10 +17,10 @@
         .leaderboard-entry {
             display: grid;
             /* Spalten: Pos | Name | Rang (Icon+Punkte) | Streak | kg */
-            grid-template-columns: 20px 1fr 120px 80px 80px;
+            grid-template-columns: 20px 1fr 100px 60px 70px; /* Schmalere Spalten */
             align-items: center;
-            gap: 1rem;
-            padding: 0.75rem;
+            gap: 0.75rem; /* Weniger Abstand */
+            padding: 0.5rem 0.75rem; /* Weniger Padding (Höhe) */
             background: var(--bg-primary);
             border-radius: 8px;
             font-size: 0.875rem;
@@ -46,7 +46,7 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.875rem;
+            font-size: 0.8rem; /* Kleinere Schrift */
             color: var(--text-secondary);
         }
         .leaderboard-rank img {
@@ -64,7 +64,7 @@
         .leaderboard-stat strong {
             color: var(--text-primary);
             font-weight: 600;
-            font-size: 1rem;
+            font-size: 0.9rem; /* Kleinere Schrift */
         }
         .leaderboard-placeholder {
             display: flex;
@@ -553,18 +553,6 @@ const firebaseConfig = {
                     <div class="streak-display" id="streakBadge">0 Tage</div>
                 </div>
 
-                <div class="bento-item leaderboard-item" style="grid-column: span 4; grid-row: span 1; padding: 1.5rem 1rem;">
-                    <div class="bento-header">
-                        <h3>🏆 Leaderboard (Top 5)</h3>
-                        <span class="date-badge">Freunde</span>
-                    </div>
-                    <div class="leaderboard-list" id="leaderboardList">
-                        <div class="leaderboard-placeholder">
-                            <p>Leaderboard wird geladen...</p>
-                        </div>
-                        </div>
-                </div>
-
                 <div class="bento-item actions-item">
                     <div class="quick-actions-bento">
                         <button class="action-btn-bento" onclick="openModal('addCalories')">
@@ -722,6 +710,17 @@ const firebaseConfig = {
             </div>
         </div>
         </div>
+
+        <div class="bento-item leaderboard-item" style="grid-column: span 4; grid-row: span 1; padding: 1.5rem 1rem;">
+                    <div class="bento-header">
+                        <h3>🏆 Leaderboard (Top 5)</h3>
+                        <span class="date-badge">Freunde</span>
+                    </div>
+                    <div class="leaderboard-list" id="leaderboardList"> <div class="leaderboard-placeholder">
+                            <p>Leaderboard wird geladen...</p>
+                        </div>
+                    </div>
+                </div>
 
     <div id="addCaloriesModal" class="modal">
         <div class="modal-content">
