@@ -2177,7 +2177,7 @@ function updateLeaderboardPage(docs) {
         const totalLost = startWeight - latestWeight;
         const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
         
-// HTML erstellen (NEUES DESIGN)
+// HTML erstellen (NEUES DESIGN - JETZT KORRIGIERT)
         const userClass = isCurrentUser ? 'current-user' : '';
         const entryHTML = `
             <div class="leaderboard-entry ${userClass}">
@@ -2187,7 +2187,8 @@ function updateLeaderboardPage(docs) {
                     <span class="leaderboard-name" title="${name}">${name} ${isCurrentUser ? '(Du)' : ''}</span>
                     <div class="leaderboard-rank">
                         <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
-                        <span class="leaderboard-rank-name">${rankInfo.name}</span>                     </div>
+                        <span class="leaderboard-rank-name">${rankInfo.name}</span>
+                    </div>
                 </div>
 
                                 <div class="leaderboard-points">
@@ -2197,7 +2198,7 @@ function updateLeaderboardPage(docs) {
                                 <div class="leaderboard-stat streak">
                     <span>🔥</span> 
                     <strong>${streak}</strong>
-        _DE        </div>
+                </div>
 
                 <div class="leaderboard-stat kg">
                     <span>📉</span> 
