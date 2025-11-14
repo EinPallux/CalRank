@@ -2175,9 +2175,7 @@ function updateLeaderboardPage(docs) {
         }
         
         const totalLost = startWeight - latestWeight;
-scope_A: {
         const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
-}
         
         // HTML erstellen
         const userClass = isCurrentUser ? 'current-user' : '';
