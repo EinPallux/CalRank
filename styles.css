@@ -2036,7 +2036,7 @@ input:checked + .slider:before {
 
         /* NEU: Container für die Leaderboard-Seite */
         .leaderboard-page-content {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
         }
         
