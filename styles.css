@@ -2059,90 +2059,111 @@ input:checked + .slider:before {
         }
 
         .leaderboard-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        .leaderboard-entry {
-            display: grid;
-            /* Spalten: Pos | Name | Rang (Icon+Punkte) | Streak | kg */
-            grid-template-columns: 20px auto 100px 60px 70px; /* Geändert: 1fr zu auto */
-            align-items: center; /* Hinzugefügt */
-            gap: 0.75rem; /* Weniger Abstand */
-            padding: 0.5rem 0.75rem; /* Weniger Padding (Höhe) */
-            background: var(--bg-primary);
-            border-radius: 8px;
-            font-size: 0.875rem;
-            border: 1px solid var(--border-color);
-        }
-        .leaderboard-entry.current-user { /* NEU: Stil für aktuellen User */
-            border-color: var(--primary-color);
-            background: rgba(99, 102, 241, 0.1);
-        }
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
 
-        .leaderboard-entry:nth-child(1) .leaderboard-pos { color: #f59e0b; /* Gold */ }
-        .leaderboard-entry:nth-child(2) .leaderboard-pos { color: #c0c0c0; /* Silber */ }
-        .leaderboard-entry:nth-child(3) .leaderboard-pos { color: #cd7f32; /* Bronze */ }
-        
-        .leaderboard-pos {
-            font-weight: 700;
-            font-size: 1rem;
-            text-align: center;
-        }
-        .leaderboard-name {
-            font-weight: 600;
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .leaderboard-rank {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.8rem; /* Kleinere Schrift */
-            color: var(--text-secondary);
-            white-space: nowrap; /* Hinzugefügt */
-        }
-        .leaderboard-rank img {
-            width: 24px;
-            height: 24px;
-        }
-        .leaderboard-rank span {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        .leaderboard-stat {
-            text-align: right;
-            color: var(--text-secondary);
-            /* Hinzugefügt/Geändert: */
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 0.35rem;
-            white-space: nowrap;
-        }
-        .leaderboard-stat strong {
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 0.9rem; /* Kleinere Schrift */
-        }
-        .leaderboard-placeholder {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100px; /* Mindesthöhe für das Bento-Item */
-            color: var(--text-secondary);
-            font-style: italic;
-        }
+.leaderboard-entry {
+    display: flex; /* Flexbox statt Grid */
+    align-items: center;
+    gap: 1rem; /* Abstand zwischen den "Spalten" */
+    padding: 0.75rem 1rem;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.leaderboard-entry.current-user {
+    border-color: var(--primary-color);
+    background: rgba(99, 102, 241, 0.1);
+}
 
-        /* Kleine Anpassung für mobile Ansicht des Leaderboards */
-        @media (max-width: 768px) {
-            .leaderboard-entry {
-                grid-template-columns: 20px 1fr 80px; /* Pos | Name | kg */
-                gap: 0.5rem;
-            }
-            .leaderboard-rank, .leaderboard-stat.streak {
-                display: none; /* Auf Mobilgeräten Rank und Streak ausblenden für Platz */
-            }
-        }
+/* 1. Spalte: Position */
+.leaderboard-pos {
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+    min-width: 25px; /* Feste Breite */
+    text-align: center;
+}
+.leaderboard-entry:nth-child(1) .leaderboard-pos { color: #f59e0b; }
+.leaderboard-entry:nth-child(2) .leaderboard-pos { color: #c0c0c0; }
+.leaderboard-entry:nth-child(3) .leaderboard-pos { color: #cd7f32; }
+
+/* 2. Spalte: User (Name + Rang) - Nimmt flexiblen Platz ein */
+.leaderboard-user {
+    flex: 1; /* WICHTIG: Nimmt allen übrigen Platz ein */
+    min-width: 0; /* Verhindert, dass der Text überläuft */
+}
+.leaderboard-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block; /* Nötig für ellipsis */
+}
+.leaderboard-rank {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+.leaderboard-rank img {
+    width: 20px;
+    height: 20px;
+}
+.leaderboard-rank-name {
+    color: var(--text-secondary); /* Neuer Stil für den Rang-Namen */
+}
+
+/* 3. Spalte: Punkte */
+.leaderboard-points {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-align: right;
+    min-width: 80px; /* Feste Mindestbreite */
+}
+.leaderboard-points strong {
+    font-size: 1rem;
+    color: var(--text-primary);
+    font-weight: 700;
+    display: block; /* Zeigt Punkte über "Pkt." */
+}
+
+/* 4. & 5. Spalte: Stats (Streak, kg) */
+.leaderboard-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+    min-width: 60px; /* Feste Mindestbreite */
+    justify-content: flex-end; /* Rechtsbündig */
+}
+.leaderboard-stat strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* Responsive für das NEUE Design */
+@media (max-width: 768px) {
+    .leaderboard-entry {
+        gap: 0.5rem;
+    }
+    .leaderboard-name {
+        font-size: 0.875rem;
+    }
+    /* Auf Mobilgeräten Punkte und Streak ausblenden für mehr Platz */
+    .leaderboard-points,
+    .leaderboard-stat.streak {
+        display: none;
+    }
+    .leaderboard-user {
+        flex: 1; /* Stellt sicher, dass der Name den Platz füllt */
+    }
+    .leaderboard-stat.kg {
+        min-width: 70px; /* Etwas mehr Platz für kg-Anzeige */
+    }
+}

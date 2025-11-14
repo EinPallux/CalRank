@@ -2177,18 +2177,32 @@ function updateLeaderboardPage(docs) {
         const totalLost = startWeight - latestWeight;
         const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
         
-        // HTML erstellen
+// HTML erstellen (NEUES DESIGN)
         const userClass = isCurrentUser ? 'current-user' : '';
         const entryHTML = `
             <div class="leaderboard-entry ${userClass}">
                 <span class="leaderboard-pos">${index + 1}.</span>
-                <span class="leaderboard-name" title="${name}">${name} ${isCurrentUser ? '(Du)' : ''}</span>
-                <div class="leaderboard-rank">
-                    <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
-                    <span>${points}</span>
+                
+                                <div class="leaderboard-user">
+                    <span class="leaderboard-name" title="${name}">${name} ${isCurrentUser ? '(Du)' : ''}</span>
+                    <div class="leaderboard-rank">
+                        <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
+                        <span class="leaderboard-rank-name">${rankInfo.name}</span>                     </div>
                 </div>
-                <div class="leaderboard-stat streak"><span>🔥</span> <strong>${streak}</strong></div>
-                <div class="leaderboard-stat kg"><span>📉</span> <strong>${totalLostDisplay}</strong> kg</div>
+
+                                <div class="leaderboard-points">
+                    <strong>${points}</strong> Pkt.
+                </div>
+
+                                <div class="leaderboard-stat streak">
+                    <span>🔥</span> 
+                    <strong>${streak}</strong>
+        _DE        </div>
+
+                <div class="leaderboard-stat kg">
+                    <span>📉</span> 
+                    <strong>${totalLostDisplay}</strong> kg
+                </div>
             </div>
         `;
         
