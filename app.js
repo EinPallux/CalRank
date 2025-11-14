@@ -1994,7 +1994,7 @@ function updateRankDisplay() {
         }
         if (nextRankNameEl) nextRankNameEl.textContent = nextRank.name;
         if (pointsToNextEl) pointsToNextEl.textContent = Math.max(0, nextThreshold - points);
-    } else {
+	} else {
         // Max rank reached
         if (rankProgressEl) {
             rankProgressEl.style.width = '100%';
@@ -2175,7 +2175,9 @@ function updateLeaderboardPage(docs) {
         }
         
         const totalLost = startWeight - latestWeight;
+scope_A: {
         const totalLostDisplay = totalLost > 0 ? `-${totalLost.toFixed(1)}` : `+${Math.abs(totalLost).toFixed(1)}`;
+}
         
         // HTML erstellen
         const userClass = isCurrentUser ? 'current-user' : '';
@@ -2187,8 +2189,8 @@ function updateLeaderboardPage(docs) {
                     <img src="${rankInfo.icon}" alt="${rankInfo.name}" onerror="this.style.display='none'">
                     <span>${points}</span>
                 </div>
-                <div class="leaderboard-stat streak">🔥 <strong>${streak}</strong></div>
-                <div class="leaderboard-stat kg">📉 <strong>${totalLostDisplay}</strong> kg</div>
+                <div class="leaderboard-stat streak"><span>🔥</span> <strong>${streak}</strong></div>
+                <div class="leaderboard-stat kg"><span>📉</span> <strong>${totalLostDisplay}</strong> kg</div>
             </div>
         `;
         

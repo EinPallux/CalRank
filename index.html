@@ -52,8 +52,8 @@
         .leaderboard-entry {
             display: grid;
             /* Spalten: Pos | Name | Rang (Icon+Punkte) | Streak | kg */
-            grid-template-columns: 20px 1fr 100px 60px 70px; /* Schmalere Spalten */
-            align-items: center;
+            grid-template-columns: 20px auto 100px 60px 70px; /* Geändert: 1fr zu auto */
+            align-items: center; /* Hinzugefügt */
             gap: 0.75rem; /* Weniger Abstand */
             padding: 0.5rem 0.75rem; /* Weniger Padding (Höhe) */
             background: var(--bg-primary);
@@ -88,6 +88,7 @@
             gap: 0.5rem;
             font-size: 0.8rem; /* Kleinere Schrift */
             color: var(--text-secondary);
+            white-space: nowrap; /* Hinzugefügt */
         }
         .leaderboard-rank img {
             width: 24px;
@@ -100,6 +101,12 @@
         .leaderboard-stat {
             text-align: right;
             color: var(--text-secondary);
+            /* Hinzugefügt/Geändert: */
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.35rem;
+            white-space: nowrap;
         }
         .leaderboard-stat strong {
             color: var(--text-primary);
